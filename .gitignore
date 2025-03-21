@@ -38,3 +38,4 @@ Thumbs.db
 *.ntvs*
 *.njsproj
 *.sln
+src/__tests__/setup.ts
