@@ -1,8 +1,9 @@
 import dotenv from "dotenv";
-import OpenAI from "openai";
+import { AzureOpenAI } from "openai";
 import { getConfig } from './config';
 import { initLogger } from './logger';
 import { Result, err, ok } from './types';
+import { DefaultAzureCredential, getBearerTokenProvider } from "@azure/identity";
 
 // Load environment variables from .env
 dotenv.config();
@@ -15,7 +16,7 @@ export interface LlmResponse {
 
 export async function createLlmResponse(settings: any = null): Promise<LlmResponse> {
     const { vault } = await getConfig();
-    
+
     // Get environment variables
     const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
     const apiKey = process.env.API_KEY;
@@ -28,11 +29,14 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
     }
 
     // Initialize the OpenAI client with Azure configuration
-    const openai = new OpenAI({
+    const credential = new DefaultAzureCredential();
+    const scope = "https://cognitiveservices.azure.com/.default";
+    const azureADTokenProvider = getBearerTokenProvider(credential, scope);
+    const openai = new AzureOpenAI({
+        // azureADTokenProvider: azureADTokenProvider,
         apiKey: apiKey,
-        baseURL: `${endpoint}/openai/deployments/${deploymentName}`,
-        defaultQuery: { "api-version": apiVersion },
-        defaultHeaders: { "api-key": apiKey }
+        deployment: endpoint,
+        apiVersion: apiVersion
     });
 
     /**
@@ -43,24 +47,27 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
     const getLLMResponse = async (prompt: string): Promise<string> => {
         try {
             logger.info({ message: "Sending completion request to OpenAI", model: deploymentName });
-            
+
             // Use the completions API
-            const completion = await openai.completions.create({
+            const completion = await openai.chat.completions.create({
+                messages: [{
+                    role:'user',
+                    content: prompt
+                }],
                 model: deploymentName,
-                prompt: prompt,
                 max_tokens: 150,
                 temperature: 0.7,
             });
 
-            if (completion.choices && completion.choices.length > 0 && completion.choices[0].text) {
-                const completionText = completion.choices[0].text;
+            if (completion.choices && completion.choices.length > 0 && completion.choices[0].message) {
+                const completionText = completion.choices[0].message;
                 logger.info({
                     message: "Received completion from OpenAI",
                     model: deploymentName,
                     usage: completion.usage
                 });
-                
-                return completionText;
+
+                return completionText.content ?? "";
             } else {
                 logger.error({ message: "No completion text found in OpenAI response" });
                 throw new Error("No completion text found in OpenAI response");
