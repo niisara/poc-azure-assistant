@@ -10,11 +10,11 @@ dotenv.config();
 
 const logger = initLogger();
 
-export interface LlmResponse {
-    getLLMResponse: (prompt: string) => Promise<string>;
+export interface LlmChatCompletion {
+    getLlmChatCompletion: (prompt: string) => Promise<string>;
 }
 
-export async function createLlmResponse(settings: any = null): Promise<LlmResponse> {
+export async function createLlmChatCompletion(settings: any = null): Promise<LlmChatCompletion> {
     const { vault } = await getConfig();
 
     // Get environment variables
@@ -32,7 +32,7 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
     const credential = new DefaultAzureCredential();
     const scope = "https://cognitiveservices.azure.com/.default";
     const azureADTokenProvider = getBearerTokenProvider(credential, scope);
-    const client = new AzureOpenAI({
+    const openai = new AzureOpenAI({
         // azureADTokenProvider: azureADTokenProvider,
         apiKey: apiKey,
         deployment: endpoint,
@@ -40,40 +40,45 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
     });
 
     /**
-     * Sends a prompt to OpenAI using the new responses API.
-     * @param prompt - The text prompt for which to generate a response.
-     * @returns The generated response as a string.
+     * Sends a prompt to OpenAI using the OpenAI package.
+     * @param prompt - The text prompt for which to generate a completion.
+     * @returns The generated completion as a string.
      */
-    const getLLMResponse = async (prompt: string): Promise<string> => {
+    const getLlmChatCompletion = async (prompt: string): Promise<string> => {
         try {
-            logger.info({ message: "Sending response request to OpenAI", model: deploymentName });
+            logger.info({ message: "Sending completion request to OpenAI", model: deploymentName });
 
-            // Use the responses API instead of the chat completions API
-            const response = await client.responses.create({
-                input:prompt,
+            // Use the completions API
+            const completion = await openai.chat.completions.create({
+                messages: [{
+                    role:'user',
+                    content: prompt
+                }],
                 model: deploymentName,
+                max_tokens: 150,
                 temperature: 0.7,
             });
 
-            if (response.output_text && response.output_text.length > 0) {
-                const responseText = response.output_text;
+            if (completion.choices && completion.choices.length > 0 && completion.choices[0].message) {
+                const completionText = completion.choices[0].message;
                 logger.info({
-                    message: "Received response from OpenAI",
+                    message: "Received completion from OpenAI",
                     model: deploymentName,
-                    usage: response.usage
+                    usage: completion.usage
                 });
-                return responseText ?? "";
+
+                return completionText.content ?? "";
             } else {
-                logger.error({ message: "No response text found in OpenAI response" });
-                throw new Error("No response text found in OpenAI response");
+                logger.error({ message: "No completion text found in OpenAI response" });
+                throw new Error("No completion text found in OpenAI response");
             }
         } catch (error) {
-            logger.error({ message: "Error getting response from OpenAI", error });
+            logger.error({ message: "Error getting completion from OpenAI", error });
             throw error;
         }
     };
 
     return {
-        getLLMResponse
+        getLlmChatCompletion
     };
 }
