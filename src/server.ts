@@ -1,6 +1,7 @@
 // src/server.ts
 import express from 'express';
-import { createLlmResponse } from './llmResponse';
+// import { createLlmResponse } from './llmResponse';
+import { createLlmResponse } from './llmResponseOpenAI';
 import { initLogger } from './logger';
 import dotenv from 'dotenv';
 
