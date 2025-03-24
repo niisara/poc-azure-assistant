@@ -32,12 +32,9 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
     const credential = new DefaultAzureCredential();
     const scope = "https://cognitiveservices.azure.com/.default";
     const azureADTokenProvider = getBearerTokenProvider(credential, scope);
-    const client = new AzureOpenAI({
-        // azureADTokenProvider: azureADTokenProvider,
-        apiKey: apiKey,
-        deployment: endpoint,
-        apiVersion: apiVersion
-    });
+    const options = { endpoint, apiKey, deploymentName, apiVersion }
+
+    const client = new AzureOpenAI(options);
 
     /**
      * Sends a prompt to OpenAI using the new responses API.
