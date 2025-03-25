@@ -1,3 +1,4 @@
+// assistantService.ts
 import dotenv from "dotenv";
 import { AzureOpenAI } from "openai";
 import { getConfig } from './config';
@@ -37,7 +38,7 @@ export async function createAssistantClient(settings: any = null): Promise<Assis
     const credential = new DefaultAzureCredential();
     const scope = "https://cognitiveservices.azure.com/.default";
     const azureADTokenProvider = getBearerTokenProvider(credential, scope);
-    const options = { endpoint, apiKey, apiVersion }
+    const options = { endpoint, apiKey, apiVersion };
 
     const client = new AzureOpenAI(options);
 
@@ -88,6 +89,10 @@ export async function createAssistantClient(settings: any = null): Promise<Assis
         threadId: string;
     }> => {
         try {
+            if (!message) {
+                throw new Error("Message cannot be empty");
+            }
+
             logger.info({ message: "Processing assistant request", assistantId: ASSISTANT_ID });
 
             // Get or create a thread
