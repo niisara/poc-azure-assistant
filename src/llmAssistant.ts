@@ -1,9 +1,7 @@
-// assistantService.ts
 import dotenv from "dotenv";
 import { AzureOpenAI } from "openai";
 import { getConfig } from './config';
 import { initLogger } from './logger';
-import { Result, err, ok } from './types';
 import { DefaultAzureCredential, getBearerTokenProvider } from "@azure/identity";
 
 // Load environment variables from .env
@@ -34,13 +32,30 @@ export async function createAssistantClient(settings: any = null): Promise<Assis
         throw new Error("Missing required environment variables: AZURE_OPENAI_ENDPOINT or API_KEY");
     }
 
+    if (!ASSISTANT_ID) {
+        logger.error({ message: "Missing required environment variable: AZURE_OPENAI_ASSISTANTID" });
+        throw new Error("Missing required environment variable: AZURE_OPENAI_ASSISTANTID");
+    }
+
+    logger.info({
+        message: "Initializing OpenAI client",
+        endpoint,
+        apiVersion,
+        assistantId: ASSISTANT_ID
+    });
+
     // Initialize the OpenAI client with Azure configuration
     const credential = new DefaultAzureCredential();
     const scope = "https://cognitiveservices.azure.com/.default";
     const azureADTokenProvider = getBearerTokenProvider(credential, scope);
-    const options = { endpoint, apiKey, apiVersion };
 
-    const client = new AzureOpenAI(options);
+    // Configure the Azure OpenAI client
+    const client = new AzureOpenAI({
+        apiKey,
+        endpoint,
+        apiVersion,
+        defaultQuery: { "api-version": apiVersion }
+    });
 
     /**
      * Creates a new thread or retrieves an existing one for the assistant conversation
@@ -49,31 +64,30 @@ export async function createAssistantClient(settings: any = null): Promise<Assis
      */
     const getOrCreateThread = async (existingThreadId?: string): Promise<string> => {
         try {
-            console.log(existingThreadId)
+            logger.info({ message: "Checking for existing thread", threadId: existingThreadId });
+
             if (existingThreadId) {
-                // Verify the thread exists by trying to retrieve it
-                await client.beta.threads.retrieve(existingThreadId);
-                logger.info({ message: "Using existing thread", threadId: existingThreadId });
-                return existingThreadId;
-            } else {
-                // Create a new thread
-                const thread = await client.beta.threads.create();
-                logger.info({ message: "Created new thread", threadId: thread.id });
-                return thread.id;
-            }
-        } catch (error) {
-            // If the thread retrieval fails, create a new one
-            if (existingThreadId) {
-                logger.error({
-                    message: "Could not retrieve existing thread, creating a new one",
-                    threadId: existingThreadId,
-                    error
-                });
-                const thread = await client.beta.threads.create();
-                logger.info({ message: "Created new thread", threadId: thread.id });
-                return thread.id;
+                try {
+                    // Verify the thread exists by trying to retrieve it
+                    await client.beta.threads.retrieve(existingThreadId);
+                    logger.info({ message: "Using existing thread", threadId: existingThreadId });
+                    return existingThreadId;
+                } catch (error: any) {
+                    logger.error({
+                        message: "Could not retrieve existing thread, creating a new one",
+                        threadId: existingThreadId,
+                        error: error.message
+                    });
+                    // Continue to create a new thread
+                }
             }
 
+            // Create a new thread
+            logger.info({ message: "Creating new thread" });
+            const thread = await client.beta.threads.create();
+            logger.info({ message: "Created new thread", threadId: thread.id });
+            return thread.id;
+        } catch (error) {
             logger.error({ message: "Error managing thread", error });
             throw error;
         }
@@ -94,22 +108,41 @@ export async function createAssistantClient(settings: any = null): Promise<Assis
                 throw new Error("Message cannot be empty");
             }
 
-            logger.info({ message: "Processing assistant request", assistantId: ASSISTANT_ID });
+            logger.info({
+                message: "Processing assistant request",
+                assistantId: ASSISTANT_ID,
+                threadId: threadId || "new"
+            });
 
             // Get or create a thread
             const currentThreadId = await getOrCreateThread(threadId);
-            console.log('------------')
-            console.log(currentThreadId)
-            console.log('------------')
+
+            logger.info({
+                message: "Adding user message to thread",
+                threadId: currentThreadId
+            });
+
             // Add the user message to the thread
             await client.beta.threads.messages.create(currentThreadId, {
                 role: "user",
                 content: message
             });
 
+            logger.info({
+                message: "Creating run with assistant",
+                threadId: currentThreadId,
+                assistantId: ASSISTANT_ID
+            });
+
             // Run the assistant on the thread
             const run = await client.beta.threads.runs.create(currentThreadId, {
-                assistant_id: ASSISTANT_ID ?? ""
+                assistant_id: ASSISTANT_ID
+            });
+
+            logger.info({
+                message: "Run created, waiting for completion",
+                threadId: currentThreadId,
+                runId: run.id
             });
 
             // Poll for the run to complete
@@ -124,6 +157,12 @@ export async function createAssistantClient(settings: any = null): Promise<Assis
                 runStatus.status !== "cancelled" &&
                 runStatus.status !== "expired") {
 
+                logger.info({
+                    message: "Run in progress",
+                    status: runStatus.status,
+                    waitTime
+                });
+
                 // Wait before checking again
                 await new Promise(resolve => setTimeout(resolve, waitTime));
 
@@ -133,6 +172,13 @@ export async function createAssistantClient(settings: any = null): Promise<Assis
                 // Check status again
                 runStatus = await client.beta.threads.runs.retrieve(currentThreadId, run.id);
             }
+
+            logger.info({
+                message: "Run completed",
+                status: runStatus.status,
+                threadId: currentThreadId,
+                runId: run.id
+            });
 
             if (runStatus.status !== "completed") {
                 logger.error({
@@ -145,6 +191,7 @@ export async function createAssistantClient(settings: any = null): Promise<Assis
             }
 
             // Get the assistant's messages
+            logger.info({ message: "Retrieving assistant messages" });
             const messages = await client.beta.threads.messages.list(currentThreadId, {
                 order: "desc",
                 limit: 1
@@ -175,7 +222,8 @@ export async function createAssistantClient(settings: any = null): Promise<Assis
             logger.info({
                 message: "Received response from assistant",
                 threadId: currentThreadId,
-                runId: run.id
+                runId: run.id,
+                responseLength: responseText.length
             });
 
             return {
