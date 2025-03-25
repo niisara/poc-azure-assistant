@@ -48,8 +48,7 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
             // Use the responses API instead of the chat completions API
             const response = await client.responses.create({
                 input:prompt,
-                model: deploymentName,
-                temperature: 0.7,
+                model: deploymentName
             });
 
             if (response.output_text && response.output_text.length > 0) {
