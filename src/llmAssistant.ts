@@ -12,7 +12,7 @@ dotenv.config();
 const logger = initLogger();
 
 // Assistant ID to use
-const ASSISTANT_ID = "asst_oh1JLsyTw99Hi9cc2vzZoDlQ";
+const ASSISTANT_ID = process.env.AZURE_OPENAI_ASSISTANTID;
 
 export interface AssistantResponse {
     getAssistantResponse: (message: string, threadId?: string) => Promise<{
@@ -49,6 +49,7 @@ export async function createAssistantClient(settings: any = null): Promise<Assis
      */
     const getOrCreateThread = async (existingThreadId?: string): Promise<string> => {
         try {
+            console.log(existingThreadId)
             if (existingThreadId) {
                 // Verify the thread exists by trying to retrieve it
                 await client.beta.threads.retrieve(existingThreadId);
@@ -97,7 +98,9 @@ export async function createAssistantClient(settings: any = null): Promise<Assis
 
             // Get or create a thread
             const currentThreadId = await getOrCreateThread(threadId);
-
+            console.log('------------')
+            console.log(currentThreadId)
+            console.log('------------')
             // Add the user message to the thread
             await client.beta.threads.messages.create(currentThreadId, {
                 role: "user",
@@ -106,7 +109,7 @@ export async function createAssistantClient(settings: any = null): Promise<Assis
 
             // Run the assistant on the thread
             const run = await client.beta.threads.runs.create(currentThreadId, {
-                assistant_id: ASSISTANT_ID
+                assistant_id: ASSISTANT_ID ?? ""
             });
 
             // Poll for the run to complete
