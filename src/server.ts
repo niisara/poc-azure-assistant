@@ -1,6 +1,7 @@
 // src/server.ts
 import express from 'express';
 import { createLlmResponse } from './llmResponse';
+import { createAssistantClient } from './llmAssistant';
 // import { createLlmResponse } from './llmResponseOpenAI';
 import { initLogger } from './logger';
 import dotenv from 'dotenv';
@@ -16,11 +17,11 @@ const logger = initLogger();
 app.use(express.json());
 
 // Initialize LLM response service
-let llmResponseService: Awaited<ReturnType<typeof createLlmResponse>>;
+let llmAssistantService: Awaited<ReturnType<typeof createAssistantClient>>;
 
 async function initLlmService() {
   try {
-    llmResponseService = await createLlmResponse();
+    llmAssistantService = await createAssistantClient();
     logger.info({ message: "LLM service initialized successfully" });
   } catch (error) {
     logger.error({ message: "Failed to initialize LLM service", error });
@@ -47,7 +48,7 @@ app.post('/api/llm/completion', async (req, res) => {
 
     logger.info({ message: "Received completion request", promptLength: prompt.length });
     
-    const response = await llmResponseService.getLLMResponse(prompt);
+    const response = await llmAssistantService.getAssistantResponse(prompt);
     
     res.status(200).json({ 
       success: true, 
