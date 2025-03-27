@@ -76,30 +76,30 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
             // Separate regular file IDs from file search IDs (prefixed with vs_)
             const regularFileIds = fileIds?.filter(id => !id.startsWith("vs_")) || [];
             const fileSearchIds = fileIds?.filter(id => id.startsWith("vs_")) || [];
-
+    
             logger.info({ 
                 message: "Sending response request to OpenAI", 
                 model: deploymentName,
                 regularFileIdsCount: regularFileIds.length,
                 fileSearchIdsCount: fileSearchIds.length
             });
-
+    
             let requestOptions: any = {
                 model: deploymentName
             };
-
+    
             // Handle regular file IDs
             if (regularFileIds.length > 0) {
                 // Create content array with text prompt
                 const content: any[] = [{ type: "input_text", text: prompt }];
                 
-                // Add each file ID as separate content item
-                regularFileIds.forEach(fileId => {
+                // Add all file IDs in a single input_file entry
+                if (regularFileIds.length > 0) {
                     content.push({
                         type: "input_file",
-                        file_id: fileId,
+                        file_id: regularFileIds,
                     });
-                });
+                }
                 
                 requestOptions.input = [
                     {
@@ -111,7 +111,7 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                 // Default case with just prompt
                 requestOptions.input = prompt;
             }
-
+    
             // Handle file search IDs
             if (fileSearchIds.length > 0) {
                 requestOptions.tools = [{
@@ -119,10 +119,10 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                     vector_store_ids: fileSearchIds,
                 }];
             }
-
+    
             // Use the responses API
             const response = await client.responses.create(requestOptions);
-
+    
             if (response.output_text && response.output_text.length > 0) {
                 const responseText = response.output_text;
                 logger.info({
