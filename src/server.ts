@@ -37,28 +37,28 @@ app.get('/health', (req, res) => {
 app.post('/api/llm/completion', async (req, res) => {
   try {
     const { prompt } = req.body;
-    
+
     if (!prompt) {
-      return res.status(400).json({ 
-        error: 'Bad Request', 
-        message: 'The request must include a "prompt" field' 
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'The request must include a "prompt" field'
       });
     }
 
     logger.info({ message: "Received completion request", promptLength: prompt.length });
-    
+
     const response = await llmAssistantService.getLLMResponse(prompt);
-    
-    res.status(200).json({ 
-      success: true, 
-      completion: response 
+
+    res.status(200).json({
+      success: true,
+      completion: response
     });
   } catch (error: any) {
     logger.error({ message: "Error processing LLM completion request", error });
-    
-    res.status(500).json({ 
-      error: 'Internal Server Error', 
-      message: error.message || 'An unexpected error occurred' 
+
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message || 'An unexpected error occurred'
     });
   }
 });
@@ -68,98 +68,100 @@ app.post('/api/llm/completion', async (req, res) => {
 app.get('/api/files/:conversationId', async (req, res) => {
   try {
     const { conversationId } = req.params;
-    
+
     if (!conversationId) {
-      return res.status(400).json({ 
-        error: 'Bad Request', 
-        message: 'The request must include a conversationId parameter' 
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'The request must include a conversationId parameter'
       });
     }
 
-    logger.info({ 
-      message: "Received request to get all file IDs", 
-      conversationId 
+    logger.info({
+      message: "Received request to get all file IDs",
+      conversationId
     });
-    
+
     const result = await llmAssistantService.uploadAllFilesFromConversation(conversationId);
-    
+
     if (result.type === 'ok') {
-      res.status(200).json({ 
-        success: true, 
+      res.status(200).json({
+        success: true,
         fileIds: result.data,
         count: result.data.length
       });
     } else {
-      res.status(500).json({ 
-        error: 'Error Getting File IDs', 
-        message: result.error.message 
+      res.status(500).json({
+        error: 'Error Getting File IDs',
+        message: result.error.message
       });
     }
   } catch (error: any) {
-    logger.error({ 
-      message: "Error processing get file IDs request", 
-      error 
+    logger.error({
+      message: "Error processing get file IDs request",
+      error
     });
-    
-    res.status(500).json({ 
-      error: 'Internal Server Error', 
-      message: error.message || 'An unexpected error occurred' 
+
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message || 'An unexpected error occurred'
     });
   }
 });
 
 // API endpoint to use files with LLM
+// API endpoint to use files with LLM (modified to accept fileIds directly)
 app.post('/api/llm/completion-with-files', async (req, res) => {
   try {
-    const { prompt, conversationId } = req.body;
-    
-    if (!prompt || !conversationId) {
-      return res.status(400).json({ 
-        error: 'Bad Request', 
-        message: 'The request must include "prompt" and "conversationId" fields' 
+    const { prompt, fileIds } = req.body;
+
+    if (!prompt || !fileIds) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'The request must include "prompt" and "fileIds" fields'
       });
     }
 
-    logger.info({ 
-      message: "Received completion with files request", 
-      conversationId,
-      promptLength: prompt.length 
+    // Check if fileIds is provided as a string and parse it
+    let parsedFileIds = fileIds;
+    if (typeof fileIds === 'string') {
+      try {
+        // Handle both array notation [id1,id2] and comma-separated "id1,id2"
+        if (fileIds.trim().startsWith('[') && fileIds.trim().endsWith(']')) {
+          parsedFileIds = JSON.parse(fileIds);
+        } else {
+          parsedFileIds = fileIds.split(',').map(id => id.trim());
+        }
+      } catch (parseError) {
+        return res.status(400).json({
+          error: 'Invalid File IDs Format',
+          message: 'The fileIds must be a valid array or comma-separated string'
+        });
+      }
+    }
+
+    logger.info({
+      message: "Received completion with files request",
+      fileIds: parsedFileIds,
+      promptLength: prompt.length
     });
-    
-    // First, get all file IDs for the conversation
-    const fileIdsResult = await llmAssistantService.uploadAllFilesFromConversation(conversationId);
-    
-    if (fileIdsResult.type !== 'ok') {
-      return res.status(500).json({ 
-        error: 'Error Getting File IDs', 
-        message: fileIdsResult.error.message 
-      });
-    }
-    
-    if (fileIdsResult.data.length === 0) {
-      return res.status(404).json({ 
-        error: 'No Files Found', 
-        message: `No files found for conversation ID: ${conversationId}` 
-      });
-    }
-    
-    // Now use the file IDs with the LLM
-    const response = await llmAssistantService.getLLMResponse(prompt, fileIdsResult.data);
-    
-    res.status(200).json({ 
-      success: true, 
+
+    // Use the file IDs directly with the LLM
+    const response = await llmAssistantService.getLLMResponse(prompt, parsedFileIds);
+
+    res.status(200).json({
+      success: true,
       completion: response,
-      filesUsed: fileIdsResult.data.length
+      filesUsed: parsedFileIds.length
     });
   } catch (error: any) {
-    logger.error({ 
-      message: "Error processing completion with files request", 
-      error 
+    logger.error({
+      message: "Error processing completion with files request",
+      error
     });
-    
-    res.status(500).json({ 
-      error: 'Internal Server Error', 
-      message: error.message || 'An unexpected error occurred' 
+
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message || 'An unexpected error occurred'
     });
   }
 });
@@ -167,7 +169,7 @@ app.post('/api/llm/completion-with-files', async (req, res) => {
 // Start server after initializing LLM service
 async function startServer() {
   await initLlmService();
-  
+
   app.listen(PORT, () => {
     logger.info({ message: `Server is running on port ${PORT}` });
   });
