@@ -1,4 +1,3 @@
-// src/server.ts
 import express from 'express';
 import { createLlmResponse } from './llmResponse';
 // import { createAssistantClient } from './llmAssistant';
@@ -56,6 +55,107 @@ app.post('/api/llm/completion', async (req, res) => {
     });
   } catch (error: any) {
     logger.error({ message: "Error processing LLM completion request", error });
+    
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      message: error.message || 'An unexpected error occurred' 
+    });
+  }
+});
+
+
+// API endpoint to get all file IDs for a conversation
+app.get('/api/files/:conversationId', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    
+    if (!conversationId) {
+      return res.status(400).json({ 
+        error: 'Bad Request', 
+        message: 'The request must include a conversationId parameter' 
+      });
+    }
+
+    logger.info({ 
+      message: "Received request to get all file IDs", 
+      conversationId 
+    });
+    
+    const result = await llmAssistantService.uploadAllFilesFromConversation(conversationId);
+    
+    if (result.type === 'ok') {
+      res.status(200).json({ 
+        success: true, 
+        fileIds: result.data,
+        count: result.data.length
+      });
+    } else {
+      res.status(500).json({ 
+        error: 'Error Getting File IDs', 
+        message: result.error.message 
+      });
+    }
+  } catch (error: any) {
+    logger.error({ 
+      message: "Error processing get file IDs request", 
+      error 
+    });
+    
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      message: error.message || 'An unexpected error occurred' 
+    });
+  }
+});
+
+// API endpoint to use files with LLM
+app.post('/api/llm/completion-with-files', async (req, res) => {
+  try {
+    const { prompt, conversationId } = req.body;
+    
+    if (!prompt || !conversationId) {
+      return res.status(400).json({ 
+        error: 'Bad Request', 
+        message: 'The request must include "prompt" and "conversationId" fields' 
+      });
+    }
+
+    logger.info({ 
+      message: "Received completion with files request", 
+      conversationId,
+      promptLength: prompt.length 
+    });
+    
+    // First, get all file IDs for the conversation
+    const fileIdsResult = await llmAssistantService.uploadAllFilesFromConversation(conversationId);
+    
+    if (fileIdsResult.type !== 'ok') {
+      return res.status(500).json({ 
+        error: 'Error Getting File IDs', 
+        message: fileIdsResult.error.message 
+      });
+    }
+    
+    if (fileIdsResult.data.length === 0) {
+      return res.status(404).json({ 
+        error: 'No Files Found', 
+        message: `No files found for conversation ID: ${conversationId}` 
+      });
+    }
+    
+    // Now use the file IDs with the LLM
+    const response = await llmAssistantService.getLLMResponse(prompt, fileIdsResult.data);
+    
+    res.status(200).json({ 
+      success: true, 
+      completion: response,
+      filesUsed: fileIdsResult.data.length
+    });
+  } catch (error: any) {
+    logger.error({ 
+      message: "Error processing completion with files request", 
+      error 
+    });
     
     res.status(500).json({ 
       error: 'Internal Server Error', 

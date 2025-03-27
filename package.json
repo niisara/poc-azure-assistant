@@ -4,7 +4,7 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node cli.js",
     "dev": "ts-node src/server.ts",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -23,6 +23,9 @@
   "dependencies": {
     "@azure/identity": "^4.8.0",
     "@azure/openai": "^2.0.0",
+    "@azure/storage-blob": "^12.27.0",
+    "axios": "^1.8.4",
+    "chalk": "^5.4.1",
     "dotenv": "^16.0.0",
     "express": "^4.18.2",
     "openai": "^4.86.2"
