@@ -21,7 +21,7 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
     const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
     const apiKey = process.env.API_KEY;
     const deploymentName = process.env.DEFAULT_MODEL;
-    const apiVersion = process.env.AZURE_OPENAI_VERSION || "2025-01-01-preview";
+    const apiVersion = process.env.AZURE_OPENAI_VERSION;
 
     if (!endpoint || !apiKey || !deploymentName) {
         logger.error({ message: "Missing required environment variables: AZURE_OPENAI_ENDPOINT, API_KEY, or DEFAULT_MODEL" });
