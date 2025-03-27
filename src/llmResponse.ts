@@ -69,30 +69,30 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
      * @returns The generated response as a string.
      */
     const getLLMResponse = async (
-        prompt: string, 
+        prompt: string,
         fileIds?: string[]
     ): Promise<string> => {
         try {
             // Separate regular file IDs from file search IDs (prefixed with vs_)
             const regularFileIds = fileIds?.filter(id => !id.startsWith("vs_")) || [];
             const fileSearchIds = fileIds?.filter(id => id.startsWith("vs_")) || [];
-    
-            logger.info({ 
-                message: "Sending response request to OpenAI", 
+
+            logger.info({
+                message: "Sending response request to OpenAI",
                 model: deploymentName,
                 regularFileIdsCount: regularFileIds.length,
                 fileSearchIdsCount: fileSearchIds.length
             });
-    
+
             let requestOptions: any = {
                 model: deploymentName
             };
-    
+
             // Handle regular file IDs
             if (regularFileIds.length > 0) {
                 // Create content array with text prompt
                 const content: any[] = [{ type: "input_text", text: prompt }];
-                
+
                 // Add all file IDs in a single input_file entry
                 if (regularFileIds.length > 0) {
                     content.push({
@@ -100,7 +100,7 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                         file_id: regularFileIds,
                     });
                 }
-                
+
                 requestOptions.input = [
                     {
                         role: "user",
@@ -111,7 +111,7 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                 // Default case with just prompt
                 requestOptions.input = prompt;
             }
-    
+
             // Handle file search IDs
             if (fileSearchIds.length > 0) {
                 requestOptions.tools = [{
@@ -119,10 +119,10 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                     vector_store_ids: fileSearchIds,
                 }];
             }
-    
+
             // Use the responses API
             const response = await client.responses.create(requestOptions);
-    
+
             if (response.output_text && response.output_text.length > 0) {
                 const responseText = response.output_text;
                 logger.info({
@@ -136,8 +136,8 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                 throw new Error("No response text found in OpenAI response");
             }
         } catch (error) {
-            logger.error({ 
-                message: "Error getting response from OpenAI", 
+            logger.error({
+                message: "Error getting response from OpenAI",
                 error,
                 fileIdsProvided: !!fileIds && fileIds.length > 0
             });
@@ -156,85 +156,85 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
         fileName: string
     ): Promise<Result<string, Error>> => {
         const tempFilePath = path.join(process.cwd(), "temp", fileName);
-        
+
         try {
             // Get Azure Storage environment variables
             const storageAccountName = process.env.AZURE_STORAGE_ACCOUNT_NAME;
             const storageAccountKey = process.env.AZURE_STORAGE_ACCOUNT_KEY;
             const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME || "conversations";
-            
+
             if (!storageAccountName || !storageAccountKey) {
                 logger.error({ message: "Missing Azure Storage credentials in environment variables" });
                 return err(new Error("Missing Azure Storage credentials in environment variables"));
             }
-            
+
             // Create the blob service client
             const sharedKeyCredential = new StorageSharedKeyCredential(
                 storageAccountName,
                 storageAccountKey
             );
-            
+
             const blobServiceClient = new BlobServiceClient(
                 `https://${storageAccountName}.blob.core.windows.net`,
                 sharedKeyCredential
             );
-            
+
             // Get a reference to the container and blob
             const containerClient = blobServiceClient.getContainerClient(containerName);
             const blobPath = `${conversationId}/${fileName}`;
             const blobClient = containerClient.getBlobClient(blobPath);
-            
+
             // Ensure temp directory exists
             if (!fs.existsSync(path.dirname(tempFilePath))) {
                 fs.mkdirSync(path.dirname(tempFilePath), { recursive: true });
             }
-            
+
             // Download the blob to a local file
             logger.info({
                 message: "Downloading file from Azure Blob Storage",
                 container: containerName,
                 blobPath: blobPath
             });
-            
+
             await blobClient.downloadToFile(tempFilePath);
-            
+
             // Upload the file to OpenAI
             logger.info({
                 message: "Uploading file to OpenAI",
                 fileName: fileName
             });
-            
+
             const fileStream = createReadStream(tempFilePath);
             const response = await client.files.create({
                 file: fileStream,
                 purpose: "assistants"
             });
-            
+
             // Clean up the temporary file
             fs.unlinkSync(tempFilePath);
-            
+
             logger.info({
                 message: "File uploaded successfully to OpenAI",
                 fileId: response.id
             });
-            
+
             return { type: 'ok', data: response.id };
         } catch (error) {
             // Clean up the temporary file if it exists
             if (fs.existsSync(tempFilePath)) {
                 fs.unlinkSync(tempFilePath);
             }
-            
+
             logger.error({
                 message: "Error downloading and uploading file",
                 error,
                 conversationId,
                 fileName
             });
-            
-            return { 
-                type: 'error', 
-                error: error instanceof Error ? error : new Error(String(error)) 
+
+            return {
+                type: 'error',
+                error: error instanceof Error ? error : new Error(String(error))
             };
         }
     };
@@ -252,36 +252,36 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
             const storageAccountName = process.env.AZURE_STORAGE_ACCOUNT_NAME;
             const storageAccountKey = process.env.AZURE_STORAGE_ACCOUNT_KEY;
             const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME || "conversations";
-            
+
             if (!storageAccountName || !storageAccountKey) {
                 logger.error({ message: "Missing Azure Storage credentials in environment variables" });
                 return err(new Error("Missing Azure Storage credentials in environment variables"));
             }
-            
+
             // Create the blob service client
             const sharedKeyCredential = new StorageSharedKeyCredential(
                 storageAccountName,
                 storageAccountKey
             );
-            
+
             const blobServiceClient = new BlobServiceClient(
                 `https://${storageAccountName}.blob.core.windows.net`,
                 sharedKeyCredential
             );
-            
+
             // Get a reference to the container
             const containerClient = blobServiceClient.getContainerClient(containerName);
-            
+
             // List all blobs in the conversation folder
             logger.info({
                 message: "Listing files in conversation folder",
                 container: containerName,
                 conversationId: conversationId
             });
-            
+
             const fileList: string[] = [];
             const prefix = `${conversationId}/`;
-            
+
             // Use the listBlobsFlat method and filter by the conversation prefix
             for await (const blob of containerClient.listBlobsFlat({ prefix })) {
                 // Extract just the filename from the full path
@@ -290,7 +290,7 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                     fileList.push(fileName);
                 }
             }
-            
+
             if (fileList.length === 0) {
                 logger.error({
                     message: "No files found in the conversation folder",
@@ -299,20 +299,20 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                 });
                 return ok([]);
             }
-            
+
             logger.info({
                 message: "Found files in conversation folder",
                 fileCount: fileList.length,
                 conversationId: conversationId
             });
-            
+
             // Upload each file and collect the file IDs
             const fileIds: string[] = [];
             const failedFiles: string[] = [];
-            
+
             for (const fileName of fileList) {
                 const result = await uploadFileFromStorage(conversationId, fileName);
-                
+
                 // Handle the Result type correctly based on your implementation
                 if (result.type === 'ok') {
                     fileIds.push(result.data);
@@ -325,7 +325,7 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                     });
                 }
             }
-            
+
             if (failedFiles.length > 0) {
                 logger.error({
                     message: "Some files failed to upload",
@@ -333,14 +333,14 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                     failedFiles: failedFiles
                 });
             }
-            
+
             logger.info({
                 message: "Completed uploading files to OpenAI",
                 successCount: fileIds.length,
                 failedCount: failedFiles.length,
                 conversationId: conversationId
             });
-            
+
             return ok(fileIds);
         } catch (error) {
             logger.error({
@@ -348,7 +348,7 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                 error,
                 conversationId
             });
-            
+
             return err(error instanceof Error ? error : new Error(String(error)));
         }
     };
