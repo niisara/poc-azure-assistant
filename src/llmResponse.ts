@@ -7,6 +7,7 @@ import { BlobServiceClient, StorageSharedKeyCredential } from "@azure/storage-bl
 import fs from "fs";
 import path from "path";
 import { createReadStream } from "fs";
+import { ResponseCreateParamsNonStreaming, ResponseInputContent, ResponseInputItem } from "openai/resources/responses/responses";
 
 // Define the Result type with correct interface
 interface Ok<T> {
@@ -84,29 +85,45 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                 fileSearchIdsCount: fileSearchIds.length
             });
 
-            let requestOptions: any = {
-                model: deploymentName
+            // Create a strongly typed request options object
+            let requestOptions: ResponseCreateParamsNonStreaming = {
+                input: prompt,
+                model: deploymentName,
+                stream: false
             };
 
             // Handle regular file IDs
             if (regularFileIds.length > 0) {
                 // Create content array with text prompt
-                const content: any[] = [{ type: "input_text", text: prompt }];
+                const content: ResponseInputContent[] = [{ type: "input_text", text: prompt }];
 
                 // Add all file IDs in a single input_file entry
                 if (regularFileIds.length > 0) {
                     content.push({
                         type: "input_file",
-                        file_id: regularFileIds,
+                        file_id: regularFileIds[0] // Note: OpenAI API expects a single file_id, not an array
                     });
+
+                    // If there are multiple files, add them as separate entries
+                    if (regularFileIds.length > 1) {
+                        for (let i = 1; i < regularFileIds.length; i++) {
+                            content.push({
+                                type: "input_file",
+                                file_id: regularFileIds[i]
+                            });
+                        }
+                    }
                 }
 
-                requestOptions.input = [
+                const inputItems: ResponseInputItem[] = [
                     {
                         role: "user",
-                        content: content,
-                    },
+                        content,
+                        type: "message"
+                    }
                 ];
+
+                requestOptions.input = inputItems;
             } else {
                 // Default case with just prompt
                 requestOptions.input = prompt;
@@ -218,7 +235,7 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                 fileId: response.id
             });
 
-            return { type: 'ok', data: response.id };
+            return ok(response.id);
         } catch (error) {
             // Clean up the temporary file if it exists
             if (fs.existsSync(tempFilePath)) {
@@ -232,10 +249,7 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                 fileName
             });
 
-            return {
-                type: 'error',
-                error: error instanceof Error ? error : new Error(String(error))
-            };
+            return err(error instanceof Error ? error : new Error(String(error)));
         }
     };
 
@@ -313,7 +327,6 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
             for (const fileName of fileList) {
                 const result = await uploadFileFromStorage(conversationId, fileName);
 
-                // Handle the Result type correctly based on your implementation
                 if (result.type === 'ok') {
                     fileIds.push(result.data);
                 } else {
