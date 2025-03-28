@@ -118,8 +118,7 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                 const inputItems: ResponseInputItem[] = [
                     {
                         role: "user",
-                        content,
-                        type: "message"
+                        content
                     }
                 ];
 
@@ -137,8 +136,34 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                 }];
             }
 
+            console.log('-------')
+            // @ts-ignore
+            console.log(JSON.stringify(requestOptions.input[0].content, null, 2));
             // Use the responses API
-            const response = await client.responses.create(requestOptions);
+            const response = await client.responses.create(
+                {
+                    tools:[
+
+                    ],
+                    input: [
+                        {
+                            role: "user",
+                            content:[
+                                {
+                                    type: "input_text",
+                                    text:"summarize"
+                                },
+                                {
+                                    type: "input_file",
+                                    file_id: "assistant-5GjsJ3CsV3y7RkVHeLVyTu",
+                                }
+                            ]
+                        }
+                    ],
+                    model: "gpt-4o",
+                    stream: false
+                },
+            );
 
             if (response.output_text && response.output_text.length > 0) {
                 const responseText = response.output_text;
