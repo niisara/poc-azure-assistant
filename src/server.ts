@@ -166,6 +166,307 @@ app.post('/api/llm/completion-with-files', async (req, res) => {
   }
 });
 
+// API endpoint to create a vector store from specific file IDs
+app.post('/api/vector-store/create-from-files', async (req, res) => {
+  try {
+    const { fileIds, metadata } = req.body;
+
+    if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'The request must include a non-empty "fileIds" array'
+      });
+    }
+
+    logger.info({
+      message: "Received request to create vector store from files",
+      fileCount: fileIds.length
+    });
+
+    const result = await llmAssistantService.createVectorStoreFromFiles(fileIds, metadata);
+
+    if (result.type === 'ok') {
+      res.status(200).json({
+        success: true,
+        vectorStoreId: result.data
+      });
+    } else {
+      res.status(500).json({
+        error: 'Error Creating Vector Store',
+        message: result.error.message
+      });
+    }
+  } catch (error: any) {
+    logger.error({
+      message: "Error processing create vector store request",
+      error
+    });
+
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message || 'An unexpected error occurred'
+    });
+  }
+});
+
+// API endpoint to create a vector store from all files in a conversation
+app.post('/api/vector-store/create-from-conversation/:conversationId', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { metadata } = req.body;
+
+    if (!conversationId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'The request must include a conversationId parameter'
+      });
+    }
+
+    logger.info({
+      message: "Received request to create vector store from conversation",
+      conversationId
+    });
+
+    const result = await llmAssistantService.createVectorStoreFromConversation(conversationId, metadata);
+
+    if (result.type === 'ok') {
+      res.status(200).json({
+        success: true,
+        vectorStoreId: result.data,
+        conversationId
+      });
+    } else {
+      res.status(500).json({
+        error: 'Error Creating Vector Store',
+        message: result.error.message
+      });
+    }
+  } catch (error: any) {
+    logger.error({
+      message: "Error processing create vector store from conversation request",
+      error
+    });
+
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message || 'An unexpected error occurred'
+    });
+  }
+});
+
+// API endpoint to get all vector stores for a conversation
+app.get('/api/vector-store/conversation/:conversationId', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+
+    if (!conversationId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'The request must include a conversationId parameter'
+      });
+    }
+
+    logger.info({
+      message: "Received request to get vector stores for conversation",
+      conversationId
+    });
+
+    const result = await llmAssistantService.getVectorStoresForConversation(conversationId);
+
+    if (result.type === 'ok') {
+      res.status(200).json({
+        success: true,
+        vectorStoreIds: result.data,
+        count: result.data.length,
+        conversationId
+      });
+    } else {
+      res.status(500).json({
+        error: 'Error Getting Vector Stores',
+        message: result.error.message
+      });
+    }
+  } catch (error: any) {
+    logger.error({
+      message: "Error processing get vector stores request",
+      error
+    });
+
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message || 'An unexpected error occurred'
+    });
+  }
+});
+
+// API endpoint to create batched vector stores from specific file IDs
+app.post('/api/vector-store/create-batched', async (req, res) => {
+  try {
+    const { fileIds, batchSize, metadata } = req.body;
+
+    if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'The request must include a non-empty "fileIds" array'
+      });
+    }
+
+    const parsedBatchSize = batchSize ? parseInt(batchSize) : 20;
+    
+    if (isNaN(parsedBatchSize) || parsedBatchSize <= 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'The "batchSize" must be a positive number'
+      });
+    }
+
+    logger.info({
+      message: "Received request to create batched vector stores",
+      fileCount: fileIds.length,
+      batchSize: parsedBatchSize
+    });
+
+    const result = await llmAssistantService.createBatchedVectorStores(fileIds, parsedBatchSize, metadata);
+
+    if (result.type === 'ok') {
+      res.status(200).json({
+        success: true,
+        vectorStoreIds: result.data,
+        count: result.data.length,
+        batchSize: parsedBatchSize,
+        totalFiles: fileIds.length
+      });
+    } else {
+      res.status(500).json({
+        error: 'Error Creating Batched Vector Stores',
+        message: result.error.message
+      });
+    }
+  } catch (error: any) {
+    logger.error({
+      message: "Error processing create batched vector stores request",
+      error
+    });
+
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message || 'An unexpected error occurred'
+    });
+  }
+});
+
+// API endpoint to create batched vector stores from all files in a conversation
+app.post('/api/vector-store/create-batched-from-conversation/:conversationId', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { batchSize, metadata } = req.body;
+
+    if (!conversationId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'The request must include a conversationId parameter'
+      });
+    }
+
+    const parsedBatchSize = batchSize ? parseInt(batchSize) : 20;
+    
+    if (isNaN(parsedBatchSize) || parsedBatchSize <= 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'The "batchSize" must be a positive number'
+      });
+    }
+
+    logger.info({
+      message: "Received request to create batched vector stores from conversation",
+      conversationId,
+      batchSize: parsedBatchSize
+    });
+
+    const result = await llmAssistantService.createBatchedVectorStoresFromConversation(
+      conversationId, 
+      parsedBatchSize, 
+      metadata
+    );
+
+    if (result.type === 'ok') {
+      res.status(200).json({
+        success: true,
+        vectorStoreIds: result.data,
+        count: result.data.length,
+        batchSize: parsedBatchSize,
+        conversationId
+      });
+    } else {
+      res.status(500).json({
+        error: 'Error Creating Batched Vector Stores',
+        message: result.error.message
+      });
+    }
+  } catch (error: any) {
+    logger.error({
+      message: "Error processing create batched vector stores from conversation request",
+      error
+    });
+
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message || 'An unexpected error occurred'
+    });
+  }
+});
+
+// API endpoint to use LLM with vector stores (file search)
+app.post('/api/llm/completion-with-file-search', async (req, res) => {
+  try {
+    const { prompt, vectorStoreIds } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'The request must include a "prompt" field'
+      });
+    }
+
+    if (!vectorStoreIds || !Array.isArray(vectorStoreIds) || vectorStoreIds.length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'The request must include a non-empty "vectorStoreIds" array'
+      });
+    }
+
+    // Ensure all vector store IDs have the "vs_" prefix
+    const prefixedVectorStoreIds = vectorStoreIds.map(id => 
+      id.startsWith('vs_') ? id : `vs_${id}`
+    );
+
+    logger.info({
+      message: "Received completion with file search request",
+      vectorStoreCount: prefixedVectorStoreIds.length,
+      promptLength: prompt.length
+    });
+
+    // Use the vector store IDs with the LLM as file search IDs
+    const response = await llmAssistantService.getLLMResponse(prompt, prefixedVectorStoreIds);
+
+    res.status(200).json({
+      success: true,
+      completion: response,
+      vectorStoresUsed: prefixedVectorStoreIds
+    });
+  } catch (error: any) {
+    logger.error({
+      message: "Error processing completion with file search request",
+      error
+    });
+
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message || 'An unexpected error occurred'
+    });
+  }
+});
+
 // Start server after initializing LLM service
 async function startServer() {
   await initLlmService();

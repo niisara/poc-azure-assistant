@@ -30,6 +30,26 @@ function err<E>(error: E): Err<E> {
     return { type: 'error', error };
 }
 
+// File information interface
+interface FileInfo {
+    name: string;
+    path: string;
+    size: number;
+    lastModified: Date;
+    contentType?: string;
+}
+
+// Search options interface
+interface SearchOptions {
+    extensions?: string[];      // File extensions to filter by (e.g., ['pdf', 'docx'])
+    namePattern?: string;       // Regex pattern to match filenames
+    minSize?: number;           // Minimum file size in bytes
+    maxSize?: number;           // Maximum file size in bytes
+    modifiedAfter?: Date;       // Files modified after this date
+    modifiedBefore?: Date;      // Files modified before this date
+    limit?: number;             // Maximum number of results to return
+}
+
 // Load environment variables from .env
 dotenv.config();
 
@@ -39,6 +59,11 @@ export interface LlmResponse {
     getLLMResponse: (prompt: string, fileIds?: string[]) => Promise<string>;
     uploadFileFromStorage: (conversationId: string, fileName: string) => Promise<Result<string, Error>>;
     uploadAllFilesFromConversation: (conversationId: string) => Promise<Result<string[], Error>>;
+    createVectorStoreFromFiles: (fileIds: string[], metadata?: Record<string, any>) => Promise<Result<string, Error>>;
+    createVectorStoreFromConversation: (conversationId: string, metadata?: Record<string, any>) => Promise<Result<string, Error>>;
+    getVectorStoresForConversation: (conversationId: string) => Promise<Result<string[], Error>>;
+    createBatchedVectorStores: (fileIds: string[], batchSize?: number, metadata?: Record<string, any>) => Promise<Result<string[], Error>>;
+    createBatchedVectorStoresFromConversation: (conversationId: string, batchSize?: number, metadata?: Record<string, any>) => Promise<Result<string[], Error>>;
 }
 
 export async function createLlmResponse(settings: any = null): Promise<LlmResponse> {
@@ -140,30 +165,7 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
             // @ts-ignore
             console.log(JSON.stringify(requestOptions.input[0].content, null, 2));
             // Use the responses API
-            const response = await client.responses.create(
-                {
-                    tools:[
-
-                    ],
-                    input: [
-                        {
-                            role: "user",
-                            content:[
-                                {
-                                    type: "input_text",
-                                    text:"summarize"
-                                },
-                                {
-                                    type: "input_file",
-                                    file_id: "assistant-5GjsJ3CsV3y7RkVHeLVyTu",
-                                }
-                            ]
-                        }
-                    ],
-                    model: "gpt-4o",
-                    stream: false
-                },
-            );
+            const response = await client.responses.create(requestOptions);
 
             if (response.output_text && response.output_text.length > 0) {
                 const responseText = response.output_text;
@@ -391,9 +393,313 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
         }
     };
 
+
+    /**
+     * Creates a vector store from files in OpenAI for search purposes.
+     * @param fileIds - Array of file IDs to include in the vector store.
+     * @param metadata - Optional metadata for the vector store.
+     * @returns A Result containing the vector store ID if successful, or an error if failed.
+     */
+    const createVectorStoreFromFiles = async (
+        fileIds: string[],
+        metadata?: Record<string, any>
+    ): Promise<Result<string, Error>> => {
+        try {
+            if (!fileIds || fileIds.length === 0) {
+                logger.error({ message: "No file IDs provided for vector store creation" });
+                return err(new Error("No file IDs provided for vector store creation"));
+            }
+
+            logger.info({
+                message: "Creating vector store from files",
+                fileCount: fileIds.length
+            });
+
+            // Create the vector store using OpenAI API
+            const response = await client.vectorStores.create({
+                file_ids: fileIds,
+                metadata: metadata || {},
+                name: `VectorStore-${new Date().toISOString()}`,
+            });
+
+            logger.info({
+                message: "Vector store created successfully",
+                vectorStoreId: response.id
+            });
+
+            return ok(response.id);
+        } catch (error) {
+            logger.error({
+                message: "Error creating vector store",
+                error,
+                fileIdsCount: fileIds.length
+            });
+
+            return err(error instanceof Error ? error : new Error(String(error)));
+        }
+    };
+
+    /**
+     * Creates a vector store from all files in a conversation.
+     * This function uploads all files from a conversation and then creates a vector store from them.
+     * @param conversationId - The ID of the conversation.
+     * @param metadata - Optional metadata for the vector store.
+     * @returns A Result containing the vector store ID if successful, or an error if failed.
+     */
+    const createVectorStoreFromConversation = async (
+        conversationId: string,
+        metadata?: Record<string, any>
+    ): Promise<Result<string, Error>> => {
+        try {
+            // First, upload all files from the conversation
+            const uploadResult = await uploadAllFilesFromConversation(conversationId);
+
+            if (uploadResult.type === 'error') {
+                return err(uploadResult.error);
+            }
+
+            const fileIds = uploadResult.data;
+
+            if (fileIds.length === 0) {
+                logger.info({
+                    message: "No files found in conversation to create vector store",
+                    conversationId
+                });
+                return err(new Error("No files found in conversation to create vector store"));
+            }
+
+            // Create metadata with conversation ID if not provided
+            const vectorMetadata = metadata || {
+                conversationId,
+                createdAt: new Date().toISOString()
+            };
+
+            // Create vector store from the uploaded files
+            const vectorStoreResult = await createVectorStoreFromFiles(fileIds, vectorMetadata);
+
+            if (vectorStoreResult.type === 'error') {
+                return err(vectorStoreResult.error);
+            }
+
+            logger.info({
+                message: "Created vector store from conversation files",
+                conversationId,
+                vectorStoreId: vectorStoreResult.data,
+                fileCount: fileIds.length
+            });
+
+            return ok(vectorStoreResult.data);
+        } catch (error) {
+            logger.error({
+                message: "Error creating vector store from conversation",
+                error,
+                conversationId
+            });
+
+            return err(error instanceof Error ? error : new Error(String(error)));
+        }
+    };
+
+    /**
+     * Retrieves all vector stores associated with a particular conversation.
+     * @param conversationId - The ID of the conversation.
+     * @returns A Result containing an array of vector store IDs if successful, or an error if failed.
+     */
+    const getVectorStoresForConversation = async (
+        conversationId: string
+    ): Promise<Result<string[], Error>> => {
+        try {
+            logger.info({
+                message: "Retrieving vector stores for conversation",
+                conversationId
+            });
+
+            // List all vector stores
+            const response = await client.vectorStores.list({
+                // Note: Unfortunately the OpenAI API doesn't support filtering
+                // directly at the API level, so we'll filter on the client side
+                limit: 100 // Adjust as needed
+            });
+
+            // Filter for vector stores with matching conversationId in metadata
+            const conversationVectorStores = response.data.filter(
+                store => store.metadata &&
+                    typeof store.metadata === 'object' &&
+                    'conversationId' in store.metadata &&
+                    store.metadata.conversationId === conversationId
+            );
+
+            const vectorStoreIds = conversationVectorStores.map(store => store.id);
+
+            logger.info({
+                message: "Retrieved vector stores for conversation",
+                conversationId,
+                vectorStoreCount: vectorStoreIds.length
+            });
+
+            return ok(vectorStoreIds);
+        } catch (error) {
+            logger.error({
+                message: "Error retrieving vector stores for conversation",
+                error,
+                conversationId
+            });
+
+            return err(error instanceof Error ? error : new Error(String(error)));
+        }
+    };
+
+    /**
+     * Batch process files by chunking them into groups for vector store creation
+     * This is useful for large conversations with many files that need to be broken
+     * into smaller vector stores for performance or size limitations.
+     * @param fileIds - Array of file IDs to process.
+     * @param batchSize - Number of files per vector store batch.
+     * @param metadata - Optional base metadata for all vector stores.
+     * @returns A Result containing an array of vector store IDs if successful, or an error if failed.
+     */
+    const createBatchedVectorStores = async (
+        fileIds: string[],
+        batchSize: number = 20,
+        metadata?: Record<string, any>
+    ): Promise<Result<string[], Error>> => {
+        try {
+            if (!fileIds || fileIds.length === 0) {
+                logger.error({ message: "No file IDs provided for batched vector store creation" });
+                return err(new Error("No file IDs provided for batched vector store creation"));
+            }
+
+            logger.info({
+                message: "Creating batched vector stores",
+                totalFileCount: fileIds.length,
+                batchSize
+            });
+
+            const vectorStoreIds: string[] = [];
+            const batches: string[][] = [];
+
+            // Split files into batches
+            for (let i = 0; i < fileIds.length; i += batchSize) {
+                batches.push(fileIds.slice(i, i + batchSize));
+            }
+
+            // Create vector store for each batch
+            for (let i = 0; i < batches.length; i++) {
+                const batch = batches[i];
+                const batchMetadata = {
+                    ...metadata,
+                    batchNumber: i + 1,
+                    totalBatches: batches.length,
+                    batchSize: batch.length
+                };
+
+                const result = await createVectorStoreFromFiles(batch, batchMetadata);
+
+                if (result.type === 'error') {
+                    logger.error({
+                        message: "Error creating vector store for batch",
+                        error: result.error,
+                        batchNumber: i + 1,
+                        batchSize: batch.length
+                    });
+                    // Continue with other batches despite error
+                    continue;
+                }
+
+                vectorStoreIds.push(result.data);
+            }
+
+            logger.info({
+                message: "Completed batched vector store creation",
+                vectorStoreCount: vectorStoreIds.length,
+                totalBatches: batches.length
+            });
+
+            return ok(vectorStoreIds);
+        } catch (error) {
+            logger.error({
+                message: "Error in batched vector store creation",
+                error,
+                fileIdsCount: fileIds.length
+            });
+
+            return err(error instanceof Error ? error : new Error(String(error)));
+        }
+    };
+
+    /**
+     * Creates batched vector stores from a conversation's files.
+     * @param conversationId - The ID of the conversation.
+     * @param batchSize - Number of files per vector store batch.
+     * @param metadata - Optional base metadata for all vector stores.
+     * @returns A Result containing an array of vector store IDs if successful, or an error if failed.
+     */
+    const createBatchedVectorStoresFromConversation = async (
+        conversationId: string,
+        batchSize: number = 20,
+        metadata?: Record<string, any>
+    ): Promise<Result<string[], Error>> => {
+        try {
+            // First, upload all files from the conversation
+            const uploadResult = await uploadAllFilesFromConversation(conversationId);
+
+            if (uploadResult.type === 'error') {
+                return err(uploadResult.error);
+            }
+
+            const fileIds = uploadResult.data;
+
+            if (fileIds.length === 0) {
+                logger.info({
+                    message: "No files found in conversation to create batched vector stores",
+                    conversationId
+                });
+                return ok([]);
+            }
+
+            // Create base metadata with conversation ID if not provided
+            const vectorMetadata = {
+                ...(metadata || {}),
+                conversationId,
+                createdAt: new Date().toISOString()
+            };
+
+            // Create batched vector stores from the uploaded files
+            const result = await createBatchedVectorStores(fileIds, batchSize, vectorMetadata);
+
+            if (result.type === 'error') {
+                return err(result.error);
+            }
+
+            logger.info({
+                message: "Created batched vector stores from conversation files",
+                conversationId,
+                vectorStoreCount: result.data.length,
+                fileCount: fileIds.length
+            });
+
+            return ok(result.data);
+        } catch (error) {
+            logger.error({
+                message: "Error creating batched vector stores from conversation",
+                error,
+                conversationId
+            });
+
+            return err(error instanceof Error ? error : new Error(String(error)));
+        }
+    };
+
+
+
     return {
         getLLMResponse,
         uploadFileFromStorage,
-        uploadAllFilesFromConversation
+        uploadAllFilesFromConversation,
+        createVectorStoreFromFiles,
+        createVectorStoreFromConversation,
+        getVectorStoresForConversation,
+        createBatchedVectorStores,
+        createBatchedVectorStoresFromConversation
     };
 }
