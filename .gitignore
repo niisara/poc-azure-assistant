@@ -39,3 +39,4 @@ Thumbs.db
 *.njsproj
 *.sln
 src/__tests__/setup.ts
+src/py-executor/.env.template
