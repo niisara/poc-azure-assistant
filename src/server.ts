@@ -4,6 +4,9 @@ import { createLlmResponse } from './llmResponse';
 // import { createLlmResponse } from './llmResponseOpenAI';
 import { initLogger } from './logger';
 import dotenv from 'dotenv';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 // Load environment variables
 dotenv.config();
@@ -11,6 +14,40 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 const logger = initLogger();
+
+// Configure multer for file uploads
+const uploadDir = path.join(process.cwd(), 'uploads');
+// Ensure uploads directory exists
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    // Keep original filename
+    cb(null, file.originalname);
+  }
+});
+
+// File filter to only accept CSV files
+const fileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  if (file.mimetype === 'text/csv' || path.extname(file.originalname).toLowerCase() === '.csv') {
+    cb(null, true);
+  } else {
+    cb(new Error('Only CSV files are allowed'));
+  }
+};
+
+const upload = multer({ 
+  storage, 
+  fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
 
 // Middleware to parse JSON bodies
 app.use(express.json());
@@ -62,7 +99,6 @@ app.post('/api/llm/completion', async (req, res) => {
     });
   }
 });
-
 
 // API endpoint to get all file IDs for a conversation
 app.get('/api/files/:conversationId', async (req, res) => {
@@ -457,6 +493,62 @@ app.post('/api/llm/completion-with-file-search', async (req, res) => {
   } catch (error: any) {
     logger.error({
       message: "Error processing completion with file search request",
+      error
+    });
+
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message || 'An unexpected error occurred'
+    });
+  }
+});
+
+// API endpoint to upload a CSV file
+app.post('/api/upload/:conversationId', upload.single('file'), async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const file = req.file;
+
+    if (!conversationId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'The request must include a conversationId parameter'
+      });
+    }
+
+    if (!file) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'No file uploaded or file is not a CSV'
+      });
+    }
+
+    logger.info({
+      message: "Received file upload request",
+      conversationId,
+      fileName: file.originalname,
+      fileSize: file.size
+    });
+
+    // Call the createFile function to upload to Azure Blob Storage
+    const result = await llmAssistantService.createFile(conversationId, file.originalname);
+
+    if (result.type === 'ok') {
+      res.status(200).json({
+        success: true,
+        filePath: result.data,
+        conversationId,
+        fileName: file.originalname
+      });
+    } else {
+      res.status(500).json({
+        error: 'Error Uploading File',
+        message: result.error.message
+      });
+    }
+  } catch (error: any) {
+    logger.error({
+      message: "Error processing file upload request",
       error
     });
 
