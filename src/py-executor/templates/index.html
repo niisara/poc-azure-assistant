@@ -3,11 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flask App</title>
+    <title>Python Code Executor</title>
+    <!-- Include CodeMirror for code editing -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
+            max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
             line-height: 1.6;
@@ -36,28 +41,203 @@
             cursor: pointer;
             border-radius: 4px;
         }
-        #response {
+        .btn-execute {
+            background-color: #2196F3;
+        }
+        .btn-clear {
+            background-color: #f44336;
+        }
+        .code-container {
+            margin: 20px 0;
+        }
+        .CodeMirror {
+            height: 300px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .output-container {
             margin-top: 20px;
+        }
+        .output-section {
+            margin-top: 10px;
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
             background-color: #fff;
             min-height: 100px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .output-section h3 {
+            margin-top: 0;
+            color: #333;
+            font-size: 16px;
+        }
+        .error {
+            color: #f44336;
+        }
+        .success {
+            color: #4CAF50;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: -1px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid #ddd;
+            border-radius: 4px 4px 0 0;
+            background-color: #f1f1f1;
+            margin-right: 5px;
+        }
+        .tab.active {
+            background-color: #fff;
+            border-bottom: 1px solid #fff;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
         }
     </style>
 </head>
 <body>
-    <h1>Simple Flask Application</h1>
+    <h1>Python Code Executor</h1>
+    
     <div class="container">
-        <h2>API Test</h2>
-        <button class="btn" id="getBtn">Test GET Request</button>
-        <button class="btn" id="postBtn">Test POST Request</button>
-        <div id="response">
-            <p>Response will appear here...</p>
+        <div class="tabs">
+            <div class="tab active" data-tab="code-executor">Code Executor</div>
+            <div class="tab" data-tab="api-test">API Test</div>
+        </div>
+        
+        <div class="tab-content active" id="code-executor">
+            <h2>Execute Python Code</h2>
+            <p>Enter Python code below and click "Execute" to run it.</p>
+            
+            <div class="code-container">
+                <textarea id="code-editor">
+# Simple Python program to greet the user
+
+def greet_user():
+    print(f"Hello, ! Nice to meet you.")
+
+
+greet_user()                    
+                </textarea>
+            </div>
+            
+            <button class="btn btn-execute" id="executeBtn">Execute Code</button>
+            <button class="btn btn-clear" id="clearBtn">Clear</button>
+            
+            <div class="output-container">
+                <h3>Output:</h3>
+                <div class="output-section" id="stdout-output">
+                    <h3>Standard Output</h3>
+                    <div id="stdout"></div>
+                </div>
+                <div class="output-section" id="result-output">
+                    <h3>Result</h3>
+                    <div id="result"></div>
+                </div>
+                <div class="output-section error" id="error-output">
+                    <h3>Errors</h3>
+                    <div id="error"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tab-content" id="api-test">
+            <h2>API Test</h2>
+            <button class="btn" id="getBtn">Test GET Request</button>
+            <button class="btn" id="postBtn">Test POST Request</button>
+            <div class="output-section" id="response">
+                <p>Response will appear here...</p>
+            </div>
         </div>
     </div>
 
     <script>
+        // Initialize CodeMirror
+        const codeEditor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
+            mode: 'python',
+            theme: 'monokai',
+            lineNumbers: true,
+            indentUnit: 4,
+            indentWithTabs: false,
+            smartIndent: true,
+            tabSize: 4,
+            lineWrapping: true,
+            extraKeys: {"Tab": "indentMore", "Shift-Tab": "indentLess"}
+        });
+
+        // Tab functionality
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active class from all tabs and contents
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                // Add active class to clicked tab
+                tab.classList.add('active');
+                
+                // Show corresponding content
+                const tabId = tab.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+
+        // Execute code button
+        document.getElementById('executeBtn').addEventListener('click', async () => {
+            const code = codeEditor.getValue();
+            
+            // Clear previous outputs
+            document.getElementById('stdout').textContent = '';
+            document.getElementById('result').textContent = '';
+            document.getElementById('error').textContent = '';
+            
+            try {
+                const response = await fetch('/api/execute', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ code })
+                });
+                
+                const data = await response.json();
+                
+                // Display stdout
+                if (data.stdout) {
+                    document.getElementById('stdout').textContent = data.stdout;
+                }
+                
+                // Display result
+                if (data.result !== null) {
+                    document.getElementById('result').textContent = JSON.stringify(data.result, null, 2);
+                }
+                
+                // Display error
+                if (data.error) {
+                    document.getElementById('error').textContent = data.error;
+                } else if (data.stderr) {
+                    document.getElementById('error').textContent = data.stderr;
+                }
+                
+            } catch (error) {
+                document.getElementById('error').textContent = `Error: ${error.message}`;
+            }
+        });
+
+        // Clear button
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            codeEditor.setValue('');
+        });
+
+        // API Test buttons
         document.getElementById('getBtn').addEventListener('click', async () => {
             try {
                 const response = await fetch('/api/hello');

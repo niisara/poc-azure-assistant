@@ -1,5 +1,9 @@
 from flask import Flask, request, jsonify, render_template
 import os
+import sys
+import io
+import traceback
+import contextlib
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -19,6 +23,56 @@ def hello():
 def echo():
     data = request.json
     return jsonify({"echo": data})
+
+@app.route('/api/execute', methods=['POST'])
+def execute_code():
+    if not request.json or 'code' not in request.json:
+        return jsonify({"error": "No code provided"}), 400
+    
+    code = request.json['code']
+    
+    # Create string IO to capture stdout and stderr
+    stdout_capture = io.StringIO()
+    stderr_capture = io.StringIO()
+    
+    # Result dictionary to return
+    result = {
+        "stdout": "",
+        "stderr": "",
+        "result": None,
+        "error": None
+    }
+    
+    # Execute the code in a safe environment
+    try:
+        # Redirect stdout and stderr
+        with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
+            # Create a local environment for execution
+            local_vars = {}
+            
+            # Create a globals dict that includes the local_vars reference
+            # This allows recursive functions to work properly
+            global_vars = {
+                "__builtins__": __builtins__,
+                "__locals__": local_vars  # This creates a reference to local_vars in globals
+            }
+            
+            # Execute the code with the modified environment
+            exec(code, global_vars, local_vars)
+            
+            # Check if there's a result variable defined
+            if 'result' in local_vars:
+                result["result"] = local_vars['result']
+        
+        # Get captured output
+        result["stdout"] = stdout_capture.getvalue()
+        result["stderr"] = stderr_capture.getvalue()
+        
+    except Exception as e:
+        result["error"] = str(e)
+        result["stderr"] = traceback.format_exc()
+    
+    return jsonify(result)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
