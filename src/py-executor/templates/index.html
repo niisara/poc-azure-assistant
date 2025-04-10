@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flask App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .container {
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .btn {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        #response {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #fff;
+            min-height: 100px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simple Flask Application</h1>
+    <div class="container">
+        <h2>API Test</h2>
+        <button class="btn" id="getBtn">Test GET Request</button>
+        <button class="btn" id="postBtn">Test POST Request</button>
+        <div id="response">
+            <p>Response will appear here...</p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('getBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/hello');
+                const data = await response.json();
+                document.getElementById('response').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('response').innerHTML = `<pre>Error: ${error.message}</pre>`;
+            }
+        });
+
+        document.getElementById('postBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/echo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: 'Hello from the client!',
+                        timestamp: new Date().toISOString()
+                    })
+                });
+                const data = await response.json();
+                document.getElementById('response').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('response').innerHTML = `<pre>Error: ${error.message}</pre>`;
+            }
+        });
+    </script>
+</body>
+</html>

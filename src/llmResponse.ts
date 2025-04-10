@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import { createReadStream } from "fs";
 import { ResponseCreateParamsNonStreaming, ResponseInputContent, ResponseInputItem } from "openai/resources/responses/responses";
+import csvParser from 'csv-parser';
 
 // Define the Result type with correct interface
 interface Ok<T> {
@@ -692,7 +693,7 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
     };
 
     /**
-     * Uploads a CSV file to Azure Blob Storage.
+     * Uploads a CSV file to Azure Blob Storage and extracts metadata about the schema.
      * @param conversationId - The ID of the conversation (folder name in blob storage).
      * @param filename - The name of the file to upload.
      * @returns A Result containing the path of the uploaded file if successful, or an error if failed.
@@ -722,6 +723,19 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                 return err(new Error("Missing Azure Storage credentials in environment variables"));
             }
 
+            // Check if the file exists in the source location
+            const sourcePath = path.join(process.cwd(), "uploads", filename);
+            if (!fs.existsSync(sourcePath)) {
+                logger.error({ 
+                    message: "Source file does not exist",
+                    sourcePath 
+                });
+                return err(new Error(`Source file ${sourcePath} does not exist`));
+            }
+
+            // Extract metadata from the CSV file
+            const schema = await extractCsvSchema(sourcePath);
+            
             // Create the blob service client
             const sharedKeyCredential = new StorageSharedKeyCredential(
                 storageAccountName,
@@ -742,33 +756,35 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
             const blobPath = `${conversationId}/${filename}`;
             const blockBlobClient = containerClient.getBlockBlobClient(blobPath);
 
-            // Check if the file exists in the source location
-            const sourcePath = path.join(process.cwd(), "uploads", filename);
-            if (!fs.existsSync(sourcePath)) {
-                logger.error({ 
-                    message: "Source file does not exist",
-                    sourcePath 
-                });
-                return err(new Error(`Source file ${sourcePath} does not exist`));
-            }
-
             // Upload the file to Azure Blob Storage
             logger.info({
                 message: "Uploading file to Azure Blob Storage",
                 container: containerName,
-                blobPath: blobPath
+                blobPath: blobPath,
+                schema
             });
 
             const fileBuffer = fs.readFileSync(sourcePath);
+            
+            // Add metadata about the schema
+            const metadata = {
+                schema: JSON.stringify(schema),
+                contentType: 'text/csv',
+                uploadedAt: new Date().toISOString(),
+                conversationId
+            };
+
             await blockBlobClient.upload(fileBuffer, fileBuffer.length, {
                 blobHTTPHeaders: {
                     blobContentType: 'text/csv'
-                }
+                },
+                metadata
             });
 
             logger.info({
                 message: "File uploaded successfully to Azure Blob Storage",
-                blobPath: blobPath
+                blobPath: blobPath,
+                schema
             });
 
             return ok(blobPath);
@@ -782,6 +798,106 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
 
             return err(error instanceof Error ? error : new Error(String(error)));
         }
+    };
+
+    /**
+     * Extracts schema information from a CSV file by analyzing the first 5 rows.
+     * @param filePath - Path to the CSV file.
+     * @returns A schema object with column names and their detected data types.
+     */
+    const extractCsvSchema = (filePath: string): Promise<Record<string, string>> => {
+        return new Promise((resolve, reject) => {
+            const rows: any[] = [];
+            const schema: Record<string, string> = {};
+            let headers: string[] = [];
+            
+            const stream = createReadStream(filePath)
+                .pipe(csvParser())
+                .on('headers', (headerList: string[]) => {
+                    headers = headerList;
+                    // Initialize schema with unknown types
+                    headers.forEach(header => {
+                        schema[header] = 'unknown';
+                    });
+                })
+                .on('data', (row: any) => {
+                    rows.push(row);
+                    // Only read up to 5 rows for type detection
+                    if (rows.length >= 5) {
+                        stream.destroy();
+                    }
+                })
+                .on('end', () => {
+                    // Detect data types for each column
+                    if (rows.length > 0) {
+                        headers.forEach(header => {
+                            schema[header] = detectDataType(rows, header);
+                        });
+                    }
+                    
+                    logger.info({
+                        message: "CSV schema extracted",
+                        schema
+                    });
+                    
+                    resolve(schema);
+                })
+                .on('error', (error: Error) => {
+                    logger.error({
+                        message: "Error extracting CSV schema",
+                        error
+                    });
+                    reject(error);
+                });
+        });
+    };
+
+    /**
+     * Detects the data type of a column by analyzing values in the first few rows.
+     * @param rows - Array of data rows.
+     * @param header - Column header name.
+     * @returns The detected data type as a string.
+     */
+    const detectDataType = (rows: any[], header: string): string => {
+        // Check if all values are numeric
+        const isNumeric = rows.every(row => {
+            const value = row[header];
+            if (value === null || value === undefined || value === '') return true; // Skip empty values
+            return !isNaN(Number(value)) && value.trim() !== '';
+        });
+        
+        if (isNumeric) {
+            // Check if all values are integers
+            const isInteger = rows.every(row => {
+                const value = row[header];
+                if (value === null || value === undefined || value === '') return true; // Skip empty values
+                return Number.isInteger(Number(value));
+            });
+            
+            return isInteger ? 'integer' : 'float';
+        }
+        
+        // Check if all values are dates
+        const isDate = rows.every(row => {
+            const value = row[header];
+            if (value === null || value === undefined || value === '') return true; // Skip empty values
+            const date = new Date(value);
+            return !isNaN(date.getTime());
+        });
+        
+        if (isDate) return 'date';
+        
+        // Check if all values are booleans
+        const isBool = rows.every(row => {
+            const value = String(row[header]).toLowerCase();
+            if (value === null || value === undefined || value === '') return true; // Skip empty values
+            return ['true', 'false', '0', '1', 'yes', 'no'].includes(value);
+        });
+        
+        if (isBool) return 'boolean';
+        
+        // Default to string
+        return 'string';
     };
 
     return {
