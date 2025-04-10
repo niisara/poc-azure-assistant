@@ -1,2 +1,5 @@
 flask==2.3.3
 python-dotenv==1.0.0
+azure-storage-blob==12.18.0
+pandas==2.1.0
+numpy==1.26.0
