@@ -30,26 +30,6 @@ function err<E>(error: E): Err<E> {
     return { type: 'error', error };
 }
 
-// File information interface
-interface FileInfo {
-    name: string;
-    path: string;
-    size: number;
-    lastModified: Date;
-    contentType?: string;
-}
-
-// Search options interface
-interface SearchOptions {
-    extensions?: string[];      // File extensions to filter by (e.g., ['pdf', 'docx'])
-    namePattern?: string;       // Regex pattern to match filenames
-    minSize?: number;           // Minimum file size in bytes
-    maxSize?: number;           // Maximum file size in bytes
-    modifiedAfter?: Date;       // Files modified after this date
-    modifiedBefore?: Date;      // Files modified before this date
-    limit?: number;             // Maximum number of results to return
-}
-
 // Load environment variables from .env
 dotenv.config();
 
