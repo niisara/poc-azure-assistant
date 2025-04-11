@@ -1,5 +1,5 @@
 import express from 'express';
-import { createLlmResponse } from './llmResponse';
+import { createLlmResponse } from './responses';
 // import { createAssistantClient } from './llmAssistant';
 // import { createLlmResponse } from './llmResponseOpenAI';
 import { initLogger } from './logger';
