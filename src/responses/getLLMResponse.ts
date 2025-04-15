@@ -1,6 +1,7 @@
 import { AzureOpenAI } from "openai";
 import { ResponseCreateParamsNonStreaming, ResponseInputContent, ResponseInputItem } from "openai/resources/responses/responses";
 import { initLogger } from '../logger';
+import axios from "axios";
 
 const logger = initLogger();
 
@@ -135,19 +136,35 @@ export async function getPythonCodeResponse(
             stream: false
         };
 
-        // No fileIds or file search logic
-
         // @ts-ignore
         console.log("[getPythonCodeResponse]", JSON.stringify(requestOptions.input, null, 2));
         const response = await client.responses.create(requestOptions);
         if (response.output_text && response.output_text.length > 0) {
-            const responseText = response.output_text;
-            logger.info({
-                message: "Received Python code from OpenAI",
-                model: deploymentName,
-                usage: response.usage
-            });
-            return responseText ?? "";
+            const pythonCodeRaw = response.output_text;
+            // Remove markdown code fences if present
+            const pythonCode = pythonCodeRaw.replace(/^```(?:python)?\s*|```$/gim, '').trim();
+            logger.info('--------------------');
+            logger.info(pythonCode);
+            logger.info('--------------------');
+
+            // Execute the Python code using the local executor API
+            try {
+                const execResponse = await axios.post(
+                    "http://127.0.0.1:5001/api/execute",
+                    { code: pythonCode },
+                    { headers: { "Content-Type": "application/json" } }
+                );
+                console.log("[getPythonCodeResponse]", JSON.stringify(execResponse.data, null, 2));
+                if (execResponse.data && typeof execResponse.data === 'object' && 'result' in execResponse.data) {
+                    return execResponse.data.result;
+                } else {
+                    // Fallback: return full response if 'result' is not present
+                    return JSON.stringify(execResponse.data);
+                }
+            } catch (execErr) {
+                logger.error({ message: "Error executing Python code via local API", error: execErr });
+                throw new Error("Failed to execute Python code: " + (execErr instanceof Error ? execErr.message : String(execErr)));
+            }
         } else {
             logger.error({ message: "No Python code found in OpenAI response" });
             throw new Error("No Python code found in OpenAI response");
