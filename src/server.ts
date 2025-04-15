@@ -507,30 +507,18 @@ app.post('/api/llm/completion-with-file-search', async (req, res) => {
 // API endpoint to get Python code response
 app.post('/api/llm/python-code', async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { prompt, conversationId } = req.body;
 
     if (!prompt) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'The request must include a "prompt" field'
-      });
+      return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    logger.info({ message: "Received Python code response request", promptLength: prompt.length });
-
-    const response = await llmAssistantService.getPythonCodeResponse(prompt);
-
-    res.status(200).json({
-      success: true,
-      pythonCode: response
-    });
-  } catch (error: any) {
-    logger.error({ message: "Error processing Python code response request", error });
-
-    res.status(500).json({
-      error: 'Internal Server Error',
-      message: error.message || 'An unexpected error occurred'
-    });
+    // Pass conversationId to getPythonCodeResponse
+    const result = await llmAssistantService.getPythonCodeResponse(prompt, conversationId);
+    res.json(result);
+  } catch (error) {
+    logger.error({ message: 'Error in /api/llm/python-code', error });
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 

@@ -12,7 +12,7 @@ const logger = initLogger();
 
 export interface LlmResponse {
     getLLMResponse: (prompt: string) => Promise<string>;
-    getPythonCodeResponse: (prompt: string) => Promise<string>;
+    getPythonCodeResponse: (prompt: string, conversationId?: string) => Promise<{ result: any, error: string | null }>;
 }
 
 export async function createLlmResponse(settings: any = null): Promise<LlmResponse> {
@@ -73,11 +73,12 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
     /**
      * Sends a prompt to OpenAI and returns ONLY Python code (no explanations, no markdown).
      * @param prompt - The text prompt for which to generate Python code.
-     * @returns The generated Python code as a string.
+     * @param conversationId - Optional conversation ID (currently unused in this implementation)
+     * @returns An object with result (the generated Python code) and error (if any)
      */
-    const getPythonCodeResponse = async (prompt: string): Promise<string> => {
+    const getPythonCodeResponse = async (prompt: string, conversationId?: string): Promise<{ result: any, error: string | null }> => {
         try {
-            logger.info({ message: "Sending Python code response request to OpenAI", model: deploymentName });
+            logger.info({ message: "Sending Python code response request to OpenAI", model: deploymentName, conversationId });
             const codeOnlyPrompt = `${prompt.trim()}\nRespond ONLY with valid Python code. Do not include any explanation, markdown, or extra text.`;
             const response = await client.responses.create({
                 input: codeOnlyPrompt,
@@ -90,14 +91,14 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
                     model: deploymentName,
                     usage: response.usage
                 });
-                return responseText ?? "";
+                return { result: responseText, error: null };
             } else {
                 logger.error({ message: "No Python code found in OpenAI response" });
-                throw new Error("No Python code found in OpenAI response");
+                return { result: null, error: "No Python code found in OpenAI response" };
             }
         } catch (error) {
             logger.error({ message: "Error getting Python code from OpenAI", error });
-            throw error;
+            return { result: null, error: error instanceof Error ? error.message : String(error) };
         }
     };
 

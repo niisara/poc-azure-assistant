@@ -50,8 +50,8 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
     return {
         getLLMResponse: (prompt: string, fileIds?: string[]) => 
             getLLMResponse(client, deploymentName, prompt, fileIds),
-        getPythonCodeResponse: (prompt: string) =>
-            getPythonCodeResponse(client, deploymentName, prompt),
+        getPythonCodeResponse: (prompt: string, conversationId?: string) =>
+            getPythonCodeResponse(client, deploymentName, prompt, conversationId),
         uploadFileFromStorage: (conversationId: string, fileName: string) => 
             uploadFileFromStorage(client, conversationId, fileName),
         uploadAllFilesFromConversation: (conversationId: string) => 
