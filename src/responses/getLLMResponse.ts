@@ -126,7 +126,7 @@ export async function getPythonCodeResponse(
     conversationId?: string
 ): Promise<{ result: any, error: string | null }> {
     // Log CSV file info if conversationId is provided
-    logger.info('--------------------');
+    logger.info('--------------------'+(conversationId ?? ""));
     if (conversationId) {
         try {
             const csvFiles = await getCsvFilesFromConversation(conversationId);
