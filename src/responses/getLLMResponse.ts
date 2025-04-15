@@ -127,24 +127,55 @@ export async function getPythonCodeResponse(
 ): Promise<{ result: any, error: string | null }> {
     // Log CSV file info if conversationId is provided
     logger.info('--------------------'+(conversationId ?? ""));
+    let csvMetadata = null;
+    let csvFileName = "";
+    
     if (conversationId) {
         try {
             const csvFiles = await getCsvFilesFromConversation(conversationId);
-            csvFiles.forEach(f => {
+            if (csvFiles.length > 0) {
+                csvFileName = csvFiles[0].name;
+                csvMetadata = csvFiles[0].metadata;
+                
                 logger.info({
                     message: 'CSV file info',
-                    fileName: f.name,
-                    metadata: f.metadata
+                    fileName: csvFileName,
+                    metadata: csvMetadata
                 });
-            });
+            }
         } catch (csvErr) {
             logger.error({ message: 'Failed to get CSV files from conversation', error: csvErr, conversationId });
         }
     }
     logger.info('--------------------');
-    // Modify the prompt to instruct the LLM to return only Python code
-    const codeOnlyPrompt = `${prompt.trim()}
+    
+    // Build a more instructive prompt that includes CSV metadata if available
+    let codeOnlyPrompt = "";
+    
+    if (csvMetadata && csvFileName) {
+        // Format the metadata to be more usable
+        const metadataStr = JSON.stringify({
+            message: "CSV file info",
+            fileName: csvFileName,
+            metadata: csvMetadata
+        }, null, 2);
+        
+        codeOnlyPrompt = `I have a CSV file with the following metadata:
+${metadataStr}
+
+User query: "${prompt.trim()}"
+
+Based on this metadata and query, generate Python code to analyze the CSV file and return the requested information.
+Use pandas to read the CSV file at './uploads/${csvFileName}' and perform the necessary operations.
+Respond ONLY with valid Python code. Do not include any explanation, markdown, or extra text.
+At the end of your code, assign the main result to a variable named 'result' (e.g., result = ...).
+If you want to show intermediate steps, you may use print statements, but the final answer must be assigned to 'result'.`;
+    } else {
+        // Fallback to the original prompt if no CSV metadata is available
+        codeOnlyPrompt = `${prompt.trim()}
 \nRespond ONLY with valid Python code. Do not include any explanation, markdown, or extra text.\nAt the end of your code, assign the main result to a variable named 'result' (e.g., result = ...). If you want to show intermediate steps, you may use print statements, but the final answer must be assigned to 'result'.\n`;
+    }
+    
     try {
         logger.info({
             message: "Sending Python code response request to OpenAI",
