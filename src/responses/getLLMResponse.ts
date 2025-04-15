@@ -108,3 +108,55 @@ export async function getLLMResponse(
         throw error;
     }
 }
+
+/**
+ * Sends a prompt to OpenAI and returns ONLY Python code (no explanations, no markdown).
+ * @param client - The OpenAI client instance
+ * @param deploymentName - The deployment name to use
+ * @param prompt - The text prompt for which to generate Python code.
+ * @returns The generated Python code as a string.
+ */
+export async function getPythonCodeResponse(
+    client: AzureOpenAI,
+    deploymentName: string,
+    prompt: string
+): Promise<string> {
+    // Modify the prompt to instruct the LLM to return only Python code
+    const codeOnlyPrompt = `${prompt.trim()}\nRespond ONLY with valid Python code. Do not include any explanation, markdown, or extra text.`;
+    try {
+        logger.info({
+            message: "Sending Python code response request to OpenAI",
+            model: deploymentName
+        });
+
+        let requestOptions: ResponseCreateParamsNonStreaming = {
+            input: codeOnlyPrompt,
+            model: deploymentName,
+            stream: false
+        };
+
+        // No fileIds or file search logic
+
+        // @ts-ignore
+        console.log("[getPythonCodeResponse]", JSON.stringify(requestOptions.input, null, 2));
+        const response = await client.responses.create(requestOptions);
+        if (response.output_text && response.output_text.length > 0) {
+            const responseText = response.output_text;
+            logger.info({
+                message: "Received Python code from OpenAI",
+                model: deploymentName,
+                usage: response.usage
+            });
+            return responseText ?? "";
+        } else {
+            logger.error({ message: "No Python code found in OpenAI response" });
+            throw new Error("No Python code found in OpenAI response");
+        }
+    } catch (error) {
+        logger.error({
+            message: "Error getting Python code from OpenAI",
+            error
+        });
+        throw error;
+    }
+}
