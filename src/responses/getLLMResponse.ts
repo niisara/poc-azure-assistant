@@ -2,6 +2,7 @@ import { AzureOpenAI } from "openai";
 import { ResponseCreateParamsNonStreaming, ResponseInputContent, ResponseInputItem } from "openai/resources/responses/responses";
 import { initLogger } from '../logger';
 import axios from "axios";
+import { getCsvFilesFromConversation } from './getCsvFilesFromConversation';
 
 const logger = initLogger();
 
@@ -115,13 +116,32 @@ export async function getLLMResponse(
  * @param client - The OpenAI client instance
  * @param deploymentName - The deployment name to use
  * @param prompt - The text prompt for which to generate Python code.
+ * @param conversationId - Optional conversation ID to fetch CSV files from.
  * @returns The generated Python code as a string.
  */
 export async function getPythonCodeResponse(
     client: AzureOpenAI,
     deploymentName: string,
-    prompt: string
+    prompt: string,
+    conversationId?: string
 ): Promise<{ result: any, error: string | null }> {
+    // Log CSV file info if conversationId is provided
+    logger.info('--------------------');
+    if (conversationId) {
+        try {
+            const csvFiles = await getCsvFilesFromConversation(conversationId);
+            csvFiles.forEach(f => {
+                logger.info({
+                    message: 'CSV file info',
+                    fileName: f.name,
+                    metadata: f.metadata
+                });
+            });
+        } catch (csvErr) {
+            logger.error({ message: 'Failed to get CSV files from conversation', error: csvErr, conversationId });
+        }
+    }
+    logger.info('--------------------');
     // Modify the prompt to instruct the LLM to return only Python code
     const codeOnlyPrompt = `${prompt.trim()}
 \nRespond ONLY with valid Python code. Do not include any explanation, markdown, or extra text.\nAt the end of your code, assign the main result to a variable named 'result' (e.g., result = ...). If you want to show intermediate steps, you may use print statements, but the final answer must be assigned to 'result'.\n`;
@@ -144,9 +164,9 @@ export async function getPythonCodeResponse(
             const pythonCodeRaw = response.output_text;
             // Remove markdown code fences if present
             const pythonCode = pythonCodeRaw.replace(/^```(?:python)?\s*|```$/gim, '').trim();
-            logger.info('--------------------');
-            logger.info(pythonCode);
-            logger.info('--------------------');
+            // logger.info('--------------------');
+            // logger.info(pythonCode);
+            // logger.info('--------------------');
 
             // Execute the Python code using the local executor API
             try {

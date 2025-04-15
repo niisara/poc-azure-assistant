@@ -2,7 +2,7 @@ import { Result } from './utils/result';
 
 export interface LlmResponse {
     getLLMResponse: (prompt: string, fileIds?: string[]) => Promise<string>;
-    getPythonCodeResponse: (prompt: string) => Promise<{ result: any, error: string | null }>;
+    getPythonCodeResponse: (prompt: string, conversationId?: string) => Promise<{ result: any, error: string | null }>;
     uploadFileFromStorage: (conversationId: string, fileName: string) => Promise<Result<string, Error>>;
     uploadAllFilesFromConversation: (conversationId: string) => Promise<Result<string[], Error>>;
     createVectorStoreFromFiles: (fileIds: string[], metadata?: Record<string, any>) => Promise<Result<string, Error>>;

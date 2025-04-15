@@ -142,11 +142,28 @@ function showAvailableFiles() {
 // Function to get Python code from a prompt
 async function getPythonCodeFromPrompt() {
     rl.question(`${colors.green}Enter your prompt for Python code: ${colors.reset}`, async (prompt) => {
+        rl.question(`${colors.green}Enter conversation ID (or leave blank): ${colors.reset}`, async (conversationId) => {
+            try {
+                const response = await axios.post(
+                    `${API_BASE_URL}/api/llm/python-code`,
+                    { prompt, conversationId: conversationId || undefined },
+                    { headers: { 'Content-Type': 'application/json' } }
+                );
+                printResponse(response);
+            } catch (error) {
+                printError(error);
+            }
+            showMainMenu();
+        });
+    });
+}
+
+// Function to get CSV files for a conversation
+async function getCsvFilesForConversation() {
+    rl.question(`${colors.green}Enter conversation ID: ${colors.reset}`, async (conversationId) => {
         try {
-            const response = await axios.post(
-                `${API_BASE_URL}/api/llm/python-code`,
-                { prompt },
-                { headers: { 'Content-Type': 'application/json' } }
+            const response = await axios.get(
+                `${API_BASE_URL}/api/conversation/${conversationId}/csv-files`
             );
             printResponse(response);
         } catch (error) {
@@ -162,6 +179,7 @@ function showMainMenu() {
     console.log('1. Upload a CSV file');
     console.log('2. List available CSV files');
     console.log('3. Get Python code from prompt');
+    console.log('4. Get CSV files for a conversation');
     console.log('0. Exit');
     
     rl.question(`${colors.green}\nSelect an option: ${colors.reset}`, (answer) => {
@@ -179,6 +197,9 @@ function showMainMenu() {
                 break;
             case '3':
                 getPythonCodeFromPrompt();
+                break;
+            case '4':
+                getCsvFilesForConversation();
                 break;
             case '0':
                 console.log(`${colors.green}Exiting...${colors.reset}`);

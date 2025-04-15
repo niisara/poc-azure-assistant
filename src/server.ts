@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { getCsvFilesFromConversation } from './responses/getCsvFilesFromConversation';
 
 // Load environment variables
 dotenv.config();
@@ -586,6 +587,20 @@ app.post('/api/upload/:conversationId', upload.single('file'), async (req, res) 
       error: 'Internal Server Error',
       message: error.message || 'An unexpected error occurred'
     });
+  }
+});
+
+// GET endpoint to test getCsvFilesFromConversation
+app.get('/api/conversation/:conversationId/csv-files', async (req, res) => {
+  const { conversationId } = req.params;
+  try {
+    if (!conversationId) {
+      return res.status(400).json({ error: 'Missing conversationId parameter' });
+    }
+    const csvFiles = await getCsvFilesFromConversation(conversationId);
+    res.json({ csvFiles });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 
