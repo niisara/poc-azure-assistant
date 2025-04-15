@@ -29,7 +29,7 @@ export async function getCsvFilesFromConversation(conversationId: string): Promi
     const containerClient = blobServiceClient.getContainerClient(containerName);
     const prefix = `${conversationId}/`;
 
-    for await (const blob of containerClient.listBlobsFlat({ prefix })) {
+    for await (const blob of containerClient.listBlobsFlat({ prefix, includeMetadata: true })) {
         const fileName = blob.name.replace(prefix, '');
         if (fileName && fileName.endsWith('.csv')) {
             csvFiles.push({
