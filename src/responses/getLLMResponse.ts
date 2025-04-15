@@ -121,7 +121,7 @@ export async function getPythonCodeResponse(
     client: AzureOpenAI,
     deploymentName: string,
     prompt: string
-): Promise<string> {
+): Promise<{ result: any, error: string | null }> {
     // Modify the prompt to instruct the LLM to return only Python code
     const codeOnlyPrompt = `${prompt.trim()}
 \nRespond ONLY with valid Python code. Do not include any explanation, markdown, or extra text.\nAt the end of your code, assign the main result to a variable named 'result' (e.g., result = ...). If you want to show intermediate steps, you may use print statements, but the final answer must be assigned to 'result'.\n`;
@@ -156,20 +156,25 @@ export async function getPythonCodeResponse(
                     { headers: { "Content-Type": "application/json" } }
                 );
                 console.log("[getPythonCodeResponse]", JSON.stringify(execResponse.data, null, 2));
-                if (execResponse.data && typeof execResponse.data === 'object' && 'result' in execResponse.data) {
-                    return execResponse.data.result;
-                } else {
-                    // Fallback: return full response if 'result' is not present
-                    return JSON.stringify(execResponse.data);
+                if (execResponse.data && typeof execResponse.data === 'object') {
+                    const result = execResponse.data.result ?? null;
+                    // Prefer error, but if not present, use stderr if it's non-empty
+                    let error = execResponse.data.error;
+                    if (!error && execResponse.data.stderr && execResponse.data.stderr.trim().length > 0) {
+                        error = execResponse.data.stderr;
+                    }
+                    return { result, error };
                 }
-            } catch (execErr) {
-                logger.error({ message: "Error executing Python code via local API", error: execErr });
-                throw new Error("Failed to execute Python code: " + (execErr instanceof Error ? execErr.message : String(execErr)));
+            } catch (execError) {
+                // If the executor API call itself fails
+                return { result: null, error: execError instanceof Error ? execError.message : String(execError) };
             }
         } else {
             logger.error({ message: "No Python code found in OpenAI response" });
             throw new Error("No Python code found in OpenAI response");
         }
+        // If we reach here, no valid result was returned in any path
+        return { result: null, error: "No code generated or unexpected response from LLM." };
     } catch (error) {
         logger.error({
             message: "Error getting Python code from OpenAI",
