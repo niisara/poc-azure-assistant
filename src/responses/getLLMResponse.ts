@@ -123,7 +123,8 @@ export async function getPythonCodeResponse(
     prompt: string
 ): Promise<string> {
     // Modify the prompt to instruct the LLM to return only Python code
-    const codeOnlyPrompt = `${prompt.trim()}\nRespond ONLY with valid Python code. Do not include any explanation, markdown, or extra text.`;
+    const codeOnlyPrompt = `${prompt.trim()}
+\nRespond ONLY with valid Python code. Do not include any explanation, markdown, or extra text.\nAt the end of your code, assign the main result to a variable named 'result' (e.g., result = ...). If you want to show intermediate steps, you may use print statements, but the final answer must be assigned to 'result'.\n`;
     try {
         logger.info({
             message: "Sending Python code response request to OpenAI",
