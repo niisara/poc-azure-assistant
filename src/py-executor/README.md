@@ -74,3 +74,17 @@ You can customize the application using the following environment variables:
 - `PORT`: The port on which the application will run (default: 5000)
 
 Create a `.env` file in the root directory to set these variables.
+
+
+
+
+
+
+conda create -n pyexecutor python=3.9
+conda activate pyexecutor
+conda install flask python-dotenv pandas
+conda install -c conda-forge azure-storage-blob
+
+
+pip install -r requirements.txt
+python app.py
