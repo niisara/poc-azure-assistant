@@ -4,7 +4,7 @@ import { getConfig } from '../config';
 import { initLogger } from '../logger';
 import { DefaultAzureCredential, getBearerTokenProvider } from "@azure/identity";
 import { LlmResponse } from './types';
-import { getLLMResponse } from './getLLMResponse';
+import { getLLMResponse, getPythonCodeResponse } from './getLLMResponse';
 import { uploadFileFromStorage } from './uploadFileFromStorage';
 import { uploadAllFilesFromConversation } from './uploadAllFilesFromConversation';
 import { createVectorStoreFromFiles } from './createVectorStoreFromFiles';
@@ -50,28 +50,22 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
     return {
         getLLMResponse: (prompt: string, fileIds?: string[]) => 
             getLLMResponse(client, deploymentName, prompt, fileIds),
-            
+        getPythonCodeResponse: (prompt: string) =>
+            getPythonCodeResponse(client, deploymentName, prompt),
         uploadFileFromStorage: (conversationId: string, fileName: string) => 
             uploadFileFromStorage(client, conversationId, fileName),
-            
         uploadAllFilesFromConversation: (conversationId: string) => 
             uploadAllFilesFromConversation(client, conversationId),
-            
         createVectorStoreFromFiles: (fileIds: string[], metadata?: Record<string, any>) => 
             createVectorStoreFromFiles(client, fileIds, metadata),
-            
         createVectorStoreFromConversation: (conversationId: string, metadata?: Record<string, any>) => 
             createVectorStoreFromConversation(client, conversationId, metadata),
-            
         getVectorStoresForConversation: (conversationId: string) => 
             getVectorStoresForConversation(client, conversationId),
-            
         createBatchedVectorStores: (fileIds: string[], batchSize?: number, metadata?: Record<string, any>) => 
             createBatchedVectorStores(client, fileIds, batchSize, metadata),
-            
         createBatchedVectorStoresFromConversation: (conversationId: string, batchSize?: number, metadata?: Record<string, any>) => 
             createBatchedVectorStoresFromConversation(client, conversationId, batchSize, metadata),
-            
         createFile: (conversationId: string, filename: string) => 
             createFile(client, conversationId, filename)
     };

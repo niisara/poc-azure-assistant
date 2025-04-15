@@ -503,6 +503,36 @@ app.post('/api/llm/completion-with-file-search', async (req, res) => {
   }
 });
 
+// API endpoint to get Python code response
+app.post('/api/llm/python-code', async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'The request must include a "prompt" field'
+      });
+    }
+
+    logger.info({ message: "Received Python code response request", promptLength: prompt.length });
+
+    const response = await llmAssistantService.getPythonCodeResponse(prompt);
+
+    res.status(200).json({
+      success: true,
+      pythonCode: response
+    });
+  } catch (error: any) {
+    logger.error({ message: "Error processing Python code response request", error });
+
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message || 'An unexpected error occurred'
+    });
+  }
+});
+
 // API endpoint to upload a CSV file
 app.post('/api/upload/:conversationId', upload.single('file'), async (req, res) => {
   try {

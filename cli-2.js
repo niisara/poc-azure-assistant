@@ -139,11 +139,29 @@ function showAvailableFiles() {
     console.log();
 }
 
+// Function to get Python code from a prompt
+async function getPythonCodeFromPrompt() {
+    rl.question(`${colors.green}Enter your prompt for Python code: ${colors.reset}`, async (prompt) => {
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/api/llm/python-code`,
+                { prompt },
+                { headers: { 'Content-Type': 'application/json' } }
+            );
+            printResponse(response);
+        } catch (error) {
+            printError(error);
+        }
+        showMainMenu();
+    });
+}
+
 // Main menu
 function showMainMenu() {
     console.log(`${colors.green}\n=== File Upload Testing CLI ===\n${colors.reset}`);
     console.log('1. Upload a CSV file');
     console.log('2. List available CSV files');
+    console.log('3. Get Python code from prompt');
     console.log('0. Exit');
     
     rl.question(`${colors.green}\nSelect an option: ${colors.reset}`, (answer) => {
@@ -158,6 +176,9 @@ function showMainMenu() {
             case '2':
                 showAvailableFiles();
                 showMainMenu();
+                break;
+            case '3':
+                getPythonCodeFromPrompt();
                 break;
             case '0':
                 console.log(`${colors.green}Exiting...${colors.reset}`);

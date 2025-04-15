@@ -12,6 +12,7 @@ const logger = initLogger();
 
 export interface LlmResponse {
     getLLMResponse: (prompt: string) => Promise<string>;
+    getPythonCodeResponse: (prompt: string) => Promise<string>;
 }
 
 export async function createLlmResponse(settings: any = null): Promise<LlmResponse> {
@@ -33,7 +34,6 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
     const scope = "https://cognitiveservices.azure.com/.default";
     const azureADTokenProvider = getBearerTokenProvider(credential, scope);
     const options = { endpoint, apiKey, deploymentName, apiVersion }
-
 
     const client = new OpenAI({apiKey});
 
@@ -70,7 +70,39 @@ export async function createLlmResponse(settings: any = null): Promise<LlmRespon
         }
     };
 
+    /**
+     * Sends a prompt to OpenAI and returns ONLY Python code (no explanations, no markdown).
+     * @param prompt - The text prompt for which to generate Python code.
+     * @returns The generated Python code as a string.
+     */
+    const getPythonCodeResponse = async (prompt: string): Promise<string> => {
+        try {
+            logger.info({ message: "Sending Python code response request to OpenAI", model: deploymentName });
+            const codeOnlyPrompt = `${prompt.trim()}\nRespond ONLY with valid Python code. Do not include any explanation, markdown, or extra text.`;
+            const response = await client.responses.create({
+                input: codeOnlyPrompt,
+                model: deploymentName
+            });
+            if (response.output_text && response.output_text.length > 0) {
+                const responseText = response.output_text;
+                logger.info({
+                    message: "Received Python code from OpenAI",
+                    model: deploymentName,
+                    usage: response.usage
+                });
+                return responseText ?? "";
+            } else {
+                logger.error({ message: "No Python code found in OpenAI response" });
+                throw new Error("No Python code found in OpenAI response");
+            }
+        } catch (error) {
+            logger.error({ message: "Error getting Python code from OpenAI", error });
+            throw error;
+        }
+    };
+
     return {
-        getLLMResponse
+        getLLMResponse,
+        getPythonCodeResponse
     };
 }
