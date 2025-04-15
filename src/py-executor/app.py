@@ -50,15 +50,9 @@ def execute_code():
             # Create a local environment for execution
             local_vars = {}
             
-            # Create a globals dict that includes the local_vars reference
-            # This allows recursive functions to work properly
-            global_vars = {
-                "__builtins__": __builtins__,
-                "__locals__": local_vars  # This creates a reference to local_vars in globals
-            }
-            
             # Execute the code with the modified environment
-            exec(code, global_vars, local_vars)
+            # Use the same dict for globals and locals so function defs are visible to comprehensions
+            exec(code, local_vars, local_vars)
             
             # Check if there's a result variable defined
             if 'result' in local_vars:
