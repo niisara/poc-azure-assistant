@@ -136,7 +136,6 @@ export async function getPythonCodeResponse(
             if (csvFiles.length > 0) {
                 csvFileName = csvFiles[0].name;
                 csvMetadata = csvFiles[0].metadata;
-                
                 logger.info({
                     message: 'CSV file info',
                     fileName: csvFileName,
@@ -166,7 +165,7 @@ ${metadataStr}
 User query: "${prompt.trim()}"
 
 Based on this metadata and query, generate Python code to analyze the CSV file and return the requested information.
-Use pandas to read the CSV file at './uploads/${csvFileName}' and perform the necessary operations.
+Use pandas to read the CSV file at './temp/${csvFileName}' and perform the necessary operations.
 Respond ONLY with valid Python code. Do not include any explanation, markdown, or extra text.
 At the end of your code, assign the main result to a variable named 'result' (e.g., result = ...).
 If you want to show intermediate steps, you may use print statements, but the final answer must be assigned to 'result'.`;
@@ -201,9 +200,14 @@ If you want to show intermediate steps, you may use print statements, but the fi
 
             // Execute the Python code using the local executor API
             try {
+                let execPayload: any = { code: pythonCode };
+                if (conversationId && csvFileName) {
+                    execPayload.conversationId = conversationId;
+                    execPayload.fileName = csvFileName;
+                }
                 const execResponse = await axios.post(
                     "http://127.0.0.1:5001/api/execute",
-                    { code: pythonCode },
+                    execPayload,
                     { headers: { "Content-Type": "application/json" } }
                 );
                 console.log("[getPythonCodeResponse]", JSON.stringify(execResponse.data, null, 2));

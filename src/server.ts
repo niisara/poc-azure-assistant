@@ -18,6 +18,7 @@ const logger = initLogger();
 
 // Configure multer for file uploads
 const uploadDir = path.join(process.cwd(), 'uploads');
+console.log(`Uploads directory--------------: ${uploadDir}`);
 // Ensure uploads directory exists
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
